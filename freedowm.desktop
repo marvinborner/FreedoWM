@@ -1,0 +1,11 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=FreedoWM
+Comment=A free window manager
+Exec=freedowm-session
+Terminal=False
+TryExec=freedowm
+Type=Application
+
+[Window Manager]
+SessionManaged=true
