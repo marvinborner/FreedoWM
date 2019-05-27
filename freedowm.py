@@ -1,21 +1,24 @@
 #!/usr/bin/env python3.7
 
-import sys
 from os import system
 
 from Xlib import X, XK
 from Xlib.display import Display
 
 display = Display()
-num = display.get_display_name()
+root = display.screen().root
+colormap = display.screen().default_colormap
+
+# Listen for window changes
+root.change_attributes(event_mask=X.PropertyChangeMask)
 
 # Keyboard listener
-display.screen().root.grab_key(X.AnyKey, X.Mod4Mask, 1, X.GrabModeAsync, X.GrabModeAsync)
+root.grab_key(X.AnyKey, X.Mod4Mask, 1, X.GrabModeAsync, X.GrabModeAsync)
 
 # Button (Mouse) listeners
-display.screen().root.grab_button(X.AnyButton, X.Mod4Mask, 1,
-                                  X.ButtonPressMask | X.ButtonReleaseMask | X.PointerMotionMask,
-                                  X.GrabModeAsync, X.GrabModeAsync, X.NONE, X.NONE)
+root.grab_button(X.AnyButton, X.Mod4Mask, 1,
+                 X.ButtonPressMask | X.ButtonReleaseMask | X.PointerMotionMask,
+                 X.GrabModeAsync, X.GrabModeAsync, X.NONE, X.NONE)
 
 start = None
 
@@ -25,7 +28,23 @@ def is_key(key_name):
 
 
 def window_focused():
-    return event.child != X.NONE
+    return hasattr(event, 'child') and event.child != X.NONE
+
+
+def update_windows():
+    # Only update if the event has relevance (focus/title change)
+    # if event.type != X.PropertyNotify:
+    #   return
+
+    for child in event.window.query_tree().children:
+        if child == X.NONE:
+            border_color = colormap.alloc_named_color("#000000").pixel
+        else:
+            border_color = colormap.alloc_named_color("#ffffff").pixel
+
+        child.configure(border_width=1)
+        child.change_attributes(None, border_pixel=border_color)
+        display.sync()
 
 
 # Check for actions until exit
@@ -66,7 +85,10 @@ while 1:
 
     # Exit window manager (MOD + C)
     elif is_key("c"):
-        sys.exit()
+        display.close()
 
     elif event.type == X.ButtonRelease:
         start = None
+
+    else:
+        update_windows()
