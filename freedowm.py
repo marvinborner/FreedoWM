@@ -10,7 +10,7 @@ root = display.screen().root
 colormap = display.screen().default_colormap
 
 # Listen for window changes
-root.change_attributes(event_mask=X.PropertyChangeMask)
+root.change_attributes(event_mask=X.PropertyChangeMask | X.FocusChangeMask)
 
 # Keyboard listener
 root.grab_key(X.AnyKey, X.Mod4Mask, 1, X.GrabModeAsync, X.GrabModeAsync)
@@ -28,7 +28,7 @@ def is_key(key_name):
 
 
 def window_focused():
-    return hasattr(event, 'child') and event.child != X.NONE
+    return hasattr(event, "child") and event.child != X.NONE
 
 
 def update_windows():
@@ -36,14 +36,20 @@ def update_windows():
     # if event.type != X.PropertyNotify:
     #   return
 
-    for child in event.window.query_tree().children:
-        if child == X.NONE:
-            border_color = colormap.alloc_named_color("#000000").pixel
-        else:
-            border_color = colormap.alloc_named_color("#ffffff").pixel
-
-        child.configure(border_width=1)
-        child.change_attributes(None, border_pixel=border_color)
+    # Update borders
+    if event.type == X.FocusOut or event.type == X.FocusIn:
+        if hasattr(event, "window"):
+            for child in root.query_tree().children:
+                print("NO FOCUS")
+                border_color = colormap.alloc_named_color("#000").pixel
+                child.configure(border_width=1)
+                child.change_attributes(None, border_pixel=border_color)
+        if window_focused():
+            print("FOCUS")
+            event.child.configure(stack_mode=X.Above)
+            border_color = colormap.alloc_named_color("#fff").pixel
+            event.child.configure(border_width=1)
+            event.child.change_attributes(None, border_pixel=border_color)
         display.sync()
 
 
@@ -66,6 +72,10 @@ while 1:
             width=max(1, attribute.width + (start.detail == 3 and xDiff or 0)),
             height=max(1, attribute.height + (start.detail == 3 and yDiff or 0))
         )
+
+    # Raise window under cursor (MOD + J)
+    if is_key("j") and window_focused():
+        event.child.configure(stack_mode=X.Below)
 
     # Raise window under cursor (MOD + K)
     if is_key("k") and window_focused():
@@ -90,5 +100,4 @@ while 1:
     elif event.type == X.ButtonRelease:
         start = None
 
-    else:
-        update_windows()
+    update_windows()
