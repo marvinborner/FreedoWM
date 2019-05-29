@@ -5,6 +5,7 @@ import os
 
 from Xlib import X, XK
 from Xlib.display import Display
+from Xlib.ext import randr
 
 
 class FreedoWM(object):
@@ -17,19 +18,24 @@ class FreedoWM(object):
         self.mod = X.Mod1Mask if self.keys["MOD"] == "alt" else X.Mod4Mask
 
         self.display = Display()
+        self.screen = self.display.screen()
+        self.root = self.screen.root
         self.event = self.display.next_event()
-        self.root = self.display.screen().root
-        self.colormap = self.display.screen().default_colormap
+        self.colormap = self.screen.default_colormap
         self.currently_focused = None
+        self.tiling_state = False
         self.start = None
+        self.monitors = []
 
         self.NET_WM_NAME = self.display.intern_atom('_NET_WM_NAME')
         self.NET_ACTIVE_WINDOW = self.display.intern_atom('_NET_ACTIVE_WINDOW')
 
+        self.get_screen_size()
+
     def set_listeners(self):
         # Listen for window changes
         self.root.change_attributes(
-            event_mask=X.PropertyChangeMask | X.FocusChangeMask | X.SubstructureNotifyMask | X.PointerMotionMask
+            event_mask=X.PropertyChangeMask | X.FocusChangeMask | X.StructureNotifyMask | X.SubstructureNotifyMask | X.PointerMotionMask
         )
 
         # Keyboard listener
@@ -43,6 +49,18 @@ class FreedoWM(object):
     def log(self, message):
         if self.config["GENERAL"]["DEBUG"] != "0":
             print(message)
+
+    def get_screen_size(self):
+        window = self.root.create_window(0, 0, 1, 1, 1, self.screen.root_depth)
+        res = randr.get_screen_resources(window).outputs
+
+        for i in range(self.display.screen_count() + 1):
+            info = randr.get_output_info(window, res[i], 0)
+            crtc_info = randr.get_crtc_info(window, info.crtc, 0)
+            self.monitors.append({"width": crtc_info.width, "height": crtc_info.height})
+
+        self.log(self.monitors)
+        window.destroy()
 
     def is_key(self, key_name):
         return self.event.type == X.KeyPress \
@@ -60,6 +78,17 @@ class FreedoWM(object):
     def update_windows(self):
         new_focus = False
 
+        if self.event.type == X.CreateNotify:
+            self.log("NEW WINDOW")
+            window = self.event.window
+            new_focus = True
+            self.log(self.display.get_default_screen())
+            window.configure(
+                stack_mode=X.Above,
+                x=int(self.monitors[0]["width"] / 2),
+                y=int(self.monitors[0]["height"] / 2)
+            )
+
         # Set focused window "in focus"
         if self.window_focused():
             if hasattr(self.event, "child") and self.event.child != self.currently_focused:
@@ -74,7 +103,7 @@ class FreedoWM(object):
         # Set all windows to un-focused borders
         if self.event.type == X.FocusOut or new_focus:
             for child in self.root.query_tree().children:
-                self.log("RESET FOCUS")
+                self.log("RESET BORDERS")
                 self.set_border(child, self.colors["INACTIVE_BORDER"])
 
         # Set focused window border
@@ -95,12 +124,12 @@ class FreedoWM(object):
             self.event = self.display.next_event()
             self.update_windows()
 
-            # Resize window (MOD + right click)
+            # Move window (MOD + left click)
             if self.event.type == X.ButtonPress and self.event.child != X.NONE:
                 attribute = self.event.child.get_geometry()
                 self.start = self.event
 
-            # Move window (MOD + left click)
+            # Resize window (MOD + right click)
             elif self.event.type == X.MotionNotify and self.start:
                 x_diff = self.event.root_x - self.start.root_x
                 y_diff = self.event.root_y - self.start.root_y
