@@ -15,7 +15,7 @@ setup(
     install_requires="Xlib",
     py_modules=["freedowm"],
     entry_points={
-        'console_scripts': ['freedowm = freedowm:main', ]
+        'console_scripts': ['freedowm = freedowm', ]
     },
     long_description=long_description,
     classifiers=[
