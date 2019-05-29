@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.7
 
-from os import system
+import configparser
+import os
 
 from Xlib import X, XK
 from Xlib.display import Display
@@ -8,6 +9,13 @@ from Xlib.display import Display
 
 class FreedoWM(object):
     def __init__(self):
+        self.config = configparser.ConfigParser()
+        self.config.read(os.environ['HOME'] + "/.config/freedowm.ini")
+        self.keys = self.config["KEYMAP"]
+        self.colors = self.config["COLORS"]
+        self.programs = self.config["PROGRAMS"]
+        self.mod = X.Mod1Mask if self.keys["MOD"] == "alt" else X.Mod4Mask
+
         self.display = Display()
         self.event = self.display.next_event()
         self.root = self.display.screen().root
@@ -25,12 +33,16 @@ class FreedoWM(object):
         )
 
         # Keyboard listener
-        self.root.grab_key(X.AnyKey, X.Mod4Mask, 1, X.GrabModeAsync, X.GrabModeAsync)
+        self.root.grab_key(X.AnyKey, self.mod, 1, X.GrabModeAsync, X.GrabModeAsync)
 
         # Button (Mouse) listeners
-        self.root.grab_button(X.AnyButton, X.Mod4Mask, 1,
+        self.root.grab_button(X.AnyButton, self.mod, 1,
                               X.ButtonPressMask | X.ButtonReleaseMask | X.PointerMotionMask,
                               X.GrabModeAsync, X.GrabModeAsync, X.NONE, X.NONE)
+
+    def log(self, message):
+        if self.config["GENERAL"]["DEBUG"] != "0":
+            print(message)
 
     def is_key(self, key_name):
         return self.event.type == X.KeyPress \
@@ -46,9 +58,6 @@ class FreedoWM(object):
             child.change_attributes(None, border_pixel=border_color)
 
     def update_windows(self):
-        # Only update if the self.event has relevance (focus/title change)
-        # if self.event.type != X.PropertyNotify:
-        #   return
         new_focus = False
 
         # Set focused window "in focus"
@@ -65,17 +74,17 @@ class FreedoWM(object):
         # Set all windows to un-focused borders
         if self.event.type == X.FocusOut or new_focus:
             for child in self.root.query_tree().children:
-                print("RESET FOCUS")
-                self.set_border(child, "#000")
+                self.log("RESET FOCUS")
+                self.set_border(child, self.colors["INACTIVE_BORDER"])
 
         # Set focused window border
         if self.event.type == X.FocusIn or new_focus:
             child = self.root.query_pointer().child
             self.currently_focused = child
             if child != 0:
-                print("FOCUS")
+                self.log("FOCUS")
                 child.configure(stack_mode=X.Above)
-                self.set_border(child, "#fff")
+                self.set_border(child, self.colors["ACTIVE_BORDER"])
 
         self.display.sync()
 
@@ -103,23 +112,23 @@ class FreedoWM(object):
                 )
 
             # Cycle between windows (MOD + Tab) // X11's "tab" keysym is 0, but it's 23
-            if self.event.type == X.KeyPress and self.event.detail == 23:
+            if self.event.type == X.KeyPress and self.event.detail == int(self.keys["CYCLE"]):
                 self.event.child.configure(stack_mode=X.Below)
 
             # Close window (MOD + Q)
-            elif self.is_key("q") and self.window_focused():
+            elif self.is_key(self.keys["CLOSE"]) and self.window_focused():
                 self.event.child.destroy()
 
             # Open terminal (MOD + Enter) // X11's "enter" keysym is 0, but it's 36
-            elif self.event.type == X.KeyPress and self.event.detail == 36:
-                system("st &")
+            elif self.event.type == X.KeyPress and self.event.detail == int(self.keys["TERMINAL"]):
+                os.system(self.programs["TERMINAL"] + " &")
 
             # Open dmenu (MOD + D)
-            elif self.is_key("d"):
-                system("dmenu_run &")
+            elif self.is_key(self.keys["MENU"]):
+                os.system(self.programs["MENU"] + " &")
 
             # Exit window manager (MOD + C)
-            elif self.is_key("c"):
+            elif self.is_key(self.keys["QUIT"]):
                 self.display.close()
 
             elif self.event.type == X.ButtonRelease:
