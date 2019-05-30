@@ -97,8 +97,6 @@ class FreedoWM(object):
                 self.tiling_windows[self.monitor_id].append(child)
 
     def update_windows(self):
-        new_focus = False
-
         # Configure new window
         if self.event.type == X.CreateNotify:
             if not self.ignore_actions:
@@ -143,30 +141,23 @@ class FreedoWM(object):
         if self.window_focused() and not self.ignore_actions:
             if hasattr(self.event, "child") and self.event.child != X.NONE \
                     and self.event.child != self.currently_focused:
-                new_focus = True
+                if self.currently_focused is not None:
+                    self.log("RESET BORDER")
+                    self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
+                self.log("FOCUS BORDER")
                 self.currently_focused = self.event.child
+                self.set_border(self.currently_focused, self.colors["ACTIVE_BORDER"])
                 self.currently_focused.configure(stack_mode=X.Above)
                 self.program_stack_index = self.program_stack.index(self.currently_focused)
             elif self.root.query_pointer().child not in (self.currently_focused, X.NONE):
-                new_focus = True
+                if self.currently_focused is not None:
+                    self.log("RESET BORDER")
+                    self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
+                self.log("FOCUS BORDER")
                 self.currently_focused = self.root.query_pointer().child
+                self.set_border(self.currently_focused, self.colors["ACTIVE_BORDER"])
                 self.currently_focused.configure(stack_mode=X.Above)
                 self.program_stack_index = self.program_stack.index(self.currently_focused)
-
-        # Set all windows to un-focused borders
-        if self.event.type == X.FocusOut and not self.ignore_actions or new_focus:
-            for child in self.root.query_tree().children:
-                self.log("RESET BORDERS")
-                self.set_border(child, self.colors["INACTIVE_BORDER"])
-
-        # Set focused window border
-        if self.event.type == X.FocusIn and not self.ignore_actions or new_focus:
-            child = self.root.query_pointer().child
-            self.currently_focused = child
-            if child != 0:
-                self.log("FOCUS")
-                child.configure(stack_mode=X.Above)
-                self.set_border(child, self.colors["ACTIVE_BORDER"])
 
         self.display.sync()
 
