@@ -12,6 +12,7 @@ class FreedoWM(object):
     def __init__(self):
         self.config = configparser.ConfigParser()
         self.config.read(os.environ['HOME'] + "/.config/freedowm.ini")
+        self.general = self.config["GENERAL"]
         self.keys = self.config["KEYMAP"]
         self.colors = self.config["COLORS"]
         self.programs = self.config["PROGRAMS"]
@@ -24,11 +25,13 @@ class FreedoWM(object):
         self.colormap = self.screen.default_colormap
         self.currently_focused = None
         self.tiling_state = False
+        self.tiling_windows = []
         self.start = None
         self.ignore_actions = False
         self.program_stack = []
         self.program_stack_index = -1
         self.monitors = []
+        self.monitor_id, self.zero_coordinate = 0, 0
 
         self.NET_WM_NAME = self.display.intern_atom('_NET_WM_NAME')
         self.NET_ACTIVE_WINDOW = self.display.intern_atom('_NET_ACTIVE_WINDOW')
@@ -50,7 +53,7 @@ class FreedoWM(object):
                               X.GrabModeAsync, X.GrabModeAsync, X.NONE, X.NONE)
 
     def log(self, message):
-        if self.config["GENERAL"]["DEBUG"] != "0":
+        if self.general["DEBUG"] != "0":
             print(message)
 
     def get_monitors(self):
@@ -75,35 +78,61 @@ class FreedoWM(object):
     def set_border(self, child, color):
         if child is not None and child is not X.NONE:
             border_color = self.colormap.alloc_named_color(color).pixel
-            child.configure(border_width=1)
+            child.configure(border_width=int(self.general["BORDER"]))
             child.change_attributes(None, border_pixel=border_color)
+
+    def update_tiling(self):
+        self.log("UPDATE TILING")
+        monitor = self.monitors[self.monitor_id]
+        tiling_num = len(self.tiling_windows[self.monitor_id]) + 1
+        width = round(monitor["width"] / tiling_num) - 2 * int(self.general["BORDER"])
+        for i, child in enumerate(self.root.query_tree().children):
+            child.configure(
+                stack_mode=X.Above,
+                width=width,
+                height=monitor["height"] - 2 * int(self.general["BORDER"]),
+                x=self.zero_coordinate + width * i,
+                y=0,
+            )
+            if child not in self.tiling_windows[self.monitor_id]:
+                self.tiling_windows[self.monitor_id].append(child)
 
     def update_windows(self):
         new_focus = False
 
+        # Configure new window
         if self.event.type == X.CreateNotify:
             if not self.ignore_actions:
                 self.log("NEW WINDOW")
                 window = self.event.window
                 if self.root.query_pointer().root_x > self.monitors[0]["width"]:
-                    x_center = int(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
-                    y_center = int(self.monitors[1]["height"] / 2)
+                    self.monitor_id = 1
+                    self.zero_coordinate = self.monitors[0]["width"]
+                    x_center = round(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
+                    y_center = round(self.monitors[1]["height"] / 2)
                 else:
-                    x_center = int(self.monitors[0]["width"] / 2)
-                    y_center = int(self.monitors[0]["height"] / 2)
+                    x_center = round(self.monitors[0]["width"] / 2)
+                    y_center = round(self.monitors[0]["height"] / 2)
                 self.program_stack.append(window)
                 self.program_stack_index = len(self.program_stack) - 1
-                window.configure(
-                    stack_mode=X.Above,
-                    x=x_center - int(window.get_geometry().width / 2),
-                    y=y_center - int(window.get_geometry().height / 2),
-                )
+                if self.tiling_state:
+                    self.update_tiling()
+                else:
+                    window.configure(
+                        stack_mode=X.Above,
+                        x=x_center - round(window.get_geometry().width / 2),
+                        y=y_center - round(window.get_geometry().height / 2),
+                    )
                 self.root.warp_pointer(x_center, y_center)
             else:
                 self.ignore_actions = False
 
+        # Remove closed window from stack
         if self.event.type == X.DestroyNotify:
             self.program_stack.remove(self.event.window)
+            if self.tiling_state:
+                self.tiling_windows[self.monitor_id].remove(self.event.window)
+                self.update_tiling()
 
         # Set focused window "in focus"
         if self.window_focused() and not self.ignore_actions:
@@ -169,9 +198,20 @@ class FreedoWM(object):
                 active_window = self.program_stack[self.program_stack_index]
                 active_window.configure(stack_mode=X.Above)
                 self.root.warp_pointer(
-                    int(active_window.get_geometry().x + active_window.get_geometry().width / 2),
-                    int(active_window.get_geometry().y + active_window.get_geometry().height / 2)
+                    round(active_window.get_geometry().x + active_window.get_geometry().width / 2),
+                    round(active_window.get_geometry().y + active_window.get_geometry().height / 2)
                 )
+
+            # Toggle tiling state (MOD + t)
+            elif self.is_key(self.keys["TILE"]):
+                if not self.tiling_state:
+                    for i in range(self.display.screen_count() + 1):
+                        self.tiling_windows.append([])
+                    self.update_tiling()
+                    self.tiling_state = True
+                else:
+                    self.tiling_windows = []
+                    self.tiling_state = False
 
             # Close window (MOD + Q)
             elif self.is_key(self.keys["CLOSE"]) and self.window_focused():
