@@ -30,7 +30,7 @@ class FreedoWM(object):
         self.NET_WM_NAME = self.display.intern_atom('_NET_WM_NAME')
         self.NET_ACTIVE_WINDOW = self.display.intern_atom('_NET_ACTIVE_WINDOW')
 
-        self.get_screen_size()
+        self.get_monitors()
 
     def set_listeners(self):
         # Listen for window changes
@@ -50,7 +50,7 @@ class FreedoWM(object):
         if self.config["GENERAL"]["DEBUG"] != "0":
             print(message)
 
-    def get_screen_size(self):
+    def get_monitors(self):
         window = self.root.create_window(0, 0, 1, 1, 1, self.screen.root_depth)
         res = randr.get_screen_resources(window).outputs
 
@@ -81,12 +81,16 @@ class FreedoWM(object):
         if self.event.type == X.CreateNotify:
             self.log("NEW WINDOW")
             window = self.event.window
-            new_focus = True
-            self.log(self.display.get_default_screen())
+            if self.root.query_pointer().root_x > self.monitors[0]["width"]:
+                x_pos = int(self.monitors[1]["width"] / 2 + self.monitors[0]["width"] - window.get_geometry().width / 2)
+                y_pos = int(self.monitors[1]["height"] / 2 - window.get_geometry().height / 2)
+            else:
+                x_pos = int(self.monitors[0]["width"] / 2 - window.get_geometry().width / 2)
+                y_pos = int(self.monitors[0]["height"] / 2 - window.get_geometry().height / 2)
             window.configure(
                 stack_mode=X.Above,
-                x=int(self.monitors[0]["width"] / 2),
-                y=int(self.monitors[0]["height"] / 2)
+                x=x_pos,
+                y=y_pos
             )
 
         # Set focused window "in focus"
