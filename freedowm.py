@@ -26,6 +26,8 @@ class FreedoWM(object):
         self.tiling_state = False
         self.start = None
         self.ignore_actions = False
+        self.program_stack = []
+        self.program_stack_index = -1
         self.monitors = []
 
         self.NET_WM_NAME = self.display.intern_atom('_NET_WM_NAME')
@@ -89,12 +91,14 @@ class FreedoWM(object):
                 else:
                     x_center = int(self.monitors[0]["width"] / 2)
                     y_center = int(self.monitors[0]["height"] / 2)
-                self.root.warp_pointer(x_center, y_center)
+                self.program_stack.append(window)
+                self.program_stack_index = len(self.program_stack) - 1
                 window.configure(
                     stack_mode=X.Above,
                     x=x_center - int(window.get_geometry().width / 2),
                     y=y_center - int(window.get_geometry().height / 2),
                 )
+                self.root.warp_pointer(x_center, y_center)
             else:
                 self.ignore_actions = False
 
@@ -104,11 +108,13 @@ class FreedoWM(object):
                     and self.event.child != self.currently_focused:
                 new_focus = True
                 self.currently_focused = self.event.child
-                self.event.child.configure(stack_mode=X.Above)
+                self.currently_focused.configure(stack_mode=X.Above)
+                self.program_stack_index = self.program_stack.index(self.currently_focused)
             elif self.root.query_pointer().child != self.currently_focused:
                 new_focus = True
                 self.currently_focused = self.root.query_pointer().child
-                self.root.query_pointer().child.configure(stack_mode=X.Above)
+                self.currently_focused.configure(stack_mode=X.Above)
+                self.program_stack_index = self.program_stack.index(self.currently_focused)
 
         # Set all windows to un-focused borders
         if self.event.type == X.FocusOut and not self.ignore_actions or new_focus:
@@ -151,8 +157,17 @@ class FreedoWM(object):
                 )
 
             # Cycle between windows (MOD + Tab) // X11's "tab" keysym is 0, but it's 23
-            if self.event.type == X.KeyPress and self.event.detail == int(self.keys["CYCLE"]):
-                self.event.child.configure(stack_mode=X.Below)
+            if self.event.type == X.KeyPress and self.event.detail == int(self.keys["CYCLE"]) \
+                    and len(self.program_stack) > 0:
+                if self.program_stack_index + 1 == len(self.program_stack):
+                    self.program_stack_index = 0
+                else:
+                    self.program_stack_index += 1
+                active_window = self.program_stack[self.program_stack_index]
+                active_window.configure(stack_mode=X.Above)
+                print(self.program_stack_index)
+                print(len(self.program_stack))
+                self.root.warp_pointer(active_window.get_geometry().x, active_window.get_geometry().y)
 
             # Close window (MOD + Q)
             elif self.is_key(self.keys["CLOSE"]) and self.window_focused():
