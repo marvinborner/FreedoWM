@@ -82,15 +82,16 @@ class FreedoWM(object):
             self.log("NEW WINDOW")
             window = self.event.window
             if self.root.query_pointer().root_x > self.monitors[0]["width"]:
-                x_pos = int(self.monitors[1]["width"] / 2 + self.monitors[0]["width"] - window.get_geometry().width / 2)
-                y_pos = int(self.monitors[1]["height"] / 2 - window.get_geometry().height / 2)
+                x_center = int(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
+                y_center = int(self.monitors[1]["height"] / 2)
             else:
-                x_pos = int(self.monitors[0]["width"] / 2 - window.get_geometry().width / 2)
-                y_pos = int(self.monitors[0]["height"] / 2 - window.get_geometry().height / 2)
+                x_center = int(self.monitors[0]["width"] / 2)
+                y_center = int(self.monitors[0]["height"] / 2)
+            self.root.warp_pointer(x_center, y_center)
             window.configure(
                 stack_mode=X.Above,
-                x=x_pos,
-                y=y_pos
+                x=x_center - int(window.get_geometry().width / 2),
+                y=y_center - int(window.get_geometry().height / 2),
             )
 
         # Set focused window "in focus"
