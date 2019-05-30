@@ -4,6 +4,7 @@ import configparser
 import os
 
 from Xlib import X, XK
+from Xlib import error
 from Xlib.display import Display
 from Xlib.ext import randr
 
@@ -114,27 +115,30 @@ class FreedoWM(object):
             child.change_attributes(None, border_pixel=border_color)
 
     def center_window(self, window):
-        if self.root.query_pointer().root_x > self.monitors[0]["width"]:
-            self.monitor_id = 1
-            self.zero_coordinate = self.monitors[0]["width"]
-            self.x_center = round(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
-            self.y_center = round(self.monitors[1]["height"] / 2)
-        else:
-            self.monitor_id = 0
-            self.x_center = round(self.monitors[0]["width"] / 2)
-            self.y_center = round(self.monitors[0]["height"] / 2)
+        try:
+            if self.root.query_pointer().root_x > self.monitors[0]["width"]:
+                self.monitor_id = 1
+                self.zero_coordinate = self.monitors[0]["width"]
+                self.x_center = round(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
+                self.y_center = round(self.monitors[1]["height"] / 2)
+            else:
+                self.monitor_id = 0
+                self.x_center = round(self.monitors[0]["width"] / 2)
+                self.y_center = round(self.monitors[0]["height"] / 2)
 
-        window.configure(
-            width=round(self.monitors[self.monitor_id]["width"] / 2),
-            height=round(self.monitors[self.monitor_id]["height"] / 2),
-        )
+            window.configure(
+                width=round(self.monitors[self.monitor_id]["width"] / 2),
+                height=round(self.monitors[self.monitor_id]["height"] / 2),
+            )
 
-        window.configure(
-            x=self.x_center - round(window.get_geometry().width / 2),
-            y=self.y_center - round(window.get_geometry().height / 2),
-        )
-        window.configure(stack_mode=X.Above)
-        self.root.warp_pointer(self.x_center, self.y_center)
+            window.configure(
+                x=self.x_center - round(window.get_geometry().width / 2),
+                y=self.y_center - round(window.get_geometry().height / 2),
+            )
+            window.configure(stack_mode=X.Above)
+            self.root.warp_pointer(self.x_center, self.y_center)
+        except Exception:
+            self.log("SOME HEAVY SOFTWARE TRIED CENTERING!")
 
     def update_tiling(self):
         """
@@ -164,6 +168,7 @@ class FreedoWM(object):
 
         # Configure new window
         if self.event.type == X.CreateNotify:
+            error.CatchError(error.BadWindow, error.BadValue)
             if not self.ignore_actions:
                 self.log("NEW WINDOW")
                 window = self.event.window
@@ -186,7 +191,8 @@ class FreedoWM(object):
         # Remove closed window from stack
         if self.event.type == X.DestroyNotify:
             self.log("CLOSE WINDOW")
-            self.program_stack.remove(self.event.window)
+            if self.event.window in self.program_stack:
+                self.program_stack.remove(self.event.window)
             if self.tiling_state:
                 self.tiling_windows[self.monitor_id].remove(self.event.window)
                 self.update_tiling()
