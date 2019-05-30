@@ -2,6 +2,7 @@
 
 import configparser
 import os
+import sys
 
 from Xlib import X, XK
 from Xlib import error
@@ -75,16 +76,19 @@ class FreedoWM(object):
         Gets/sets your monitor setup using the Xlib xrandr helper functions
         :return:
         """
-        window = self.root.create_window(0, 0, 1, 1, 1, self.screen.root_depth)
-        res = randr.get_screen_resources(window).outputs
+        try:
+            window = self.root.create_window(0, 0, 1, 1, 1, self.screen.root_depth)
+            res = randr.get_screen_resources(window).outputs
 
-        for i in range(self.display.screen_count() + 1):
-            info = randr.get_output_info(window, res[i], 0)
-            crtc_info = randr.get_crtc_info(window, info.crtc, 0)
-            self.monitors.append({"width": crtc_info.width, "height": crtc_info.height})
+            for i in range(self.display.screen_count() + 1):
+                info = randr.get_output_info(window, res[i], 0)
+                crtc_info = randr.get_crtc_info(window, info.crtc, 0)
+                self.monitors.append({"width": crtc_info.width, "height": crtc_info.height})
 
-        self.log(self.monitors)
-        window.destroy()
+            self.log(self.monitors)
+            window.destroy()
+        except (error.BadWindow, error.BadDrawable):
+            self.log("BAD WINDOW OR DRAWABLE!")
 
     def is_key(self, key_name):
         """
@@ -138,7 +142,7 @@ class FreedoWM(object):
             window.configure(stack_mode=X.Above)
             self.root.warp_pointer(self.x_center, self.y_center)
         except Exception:
-            self.log("SOME HEAVY SOFTWARE TRIED CENTERING!")
+            self.log("GPU OVERFLOW!?")
 
     def update_tiling(self):
         """
@@ -168,41 +172,46 @@ class FreedoWM(object):
 
         # Configure new window
         if self.event.type == X.CreateNotify:
-            error.CatchError(error.BadWindow, error.BadValue)
-            if not self.ignore_actions:
-                self.log("NEW WINDOW")
-                window = self.event.window
-                self.program_stack.append(window)
-                self.program_stack_index = len(self.program_stack) - 1
-                if self.tiling_state:
-                    self.tiling_windows[self.monitor_id].append(window)
-                    self.update_tiling()
-                    monitor_width = self.monitors[self.monitor_id]["width"]
-                    self.root.warp_pointer(
-                        round(self.zero_coordinate + monitor_width -
-                              (monitor_width / len(self.tiling_windows[self.monitor_id]) + 1) / 2),
-                        self.y_center
-                    )
+            try:
+                if not self.ignore_actions:
+                    self.log("NEW WINDOW")
+                    window = self.event.window
+                    self.program_stack.append(window)
+                    self.program_stack_index = len(self.program_stack) - 1
+                    if self.tiling_state:
+                        self.tiling_windows[self.monitor_id].append(window)
+                        self.update_tiling()
+                        monitor_width = self.monitors[self.monitor_id]["width"]
+                        self.root.warp_pointer(
+                            round(self.zero_coordinate + monitor_width -
+                                  (monitor_width / len(self.tiling_windows[self.monitor_id]) + 1) / 2),
+                            self.y_center
+                        )
+                    else:
+                        self.center_window(window)
                 else:
-                    self.center_window(window)
-            else:
-                self.ignore_actions = False
+                    self.ignore_actions = False
+            except (error.BadWindow, error.BadDrawable):
+                self.log("BAD WINDOW OR DRAWABLE!")
 
         # Remove closed window from stack
         if self.event.type == X.DestroyNotify:
-            self.log("CLOSE WINDOW")
-            if self.event.window in self.program_stack:
-                self.program_stack.remove(self.event.window)
-            if self.tiling_state:
-                self.tiling_windows[self.monitor_id].remove(self.event.window)
-                self.update_tiling()
-            elif len(self.program_stack) > 0:
-                focused_window = self.program_stack[0]
-                focused_window.configure(stack_mode=X.Above)
-                self.root.warp_pointer(
-                    round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
-                    round(focused_window.get_geometry().y + focused_window.get_geometry().height / 2)
-                )
+            try:
+                self.log("CLOSE WINDOW")
+                if self.event.window in self.program_stack:
+                    self.program_stack.remove(self.event.window)
+                if self.tiling_state:
+                    self.tiling_windows[self.monitor_id].remove(self.event.window)
+                    self.update_tiling()
+                elif len(self.program_stack) > 0:
+                    focused_window = self.program_stack[0]
+                    focused_window.configure(stack_mode=X.Above)
+                    self.root.warp_pointer(
+                        round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
+                        round(focused_window.get_geometry().y + focused_window.get_geometry().height / 2)
+                    )
+            except (error.BadWindow, error.BadDrawable):
+                self.log("BAD WINDOW OR DRAWABLE!")
 
         # Set focused window "in focus"
         if self.window_focused() and not self.ignore_actions:
@@ -320,10 +329,14 @@ class FreedoWM(object):
             # Exit window manager (MOD + P)
             elif self.is_key(self.keys["QUIT"]):
                 self.display.close()
+                sys.exit()
 
             elif self.event.type == X.ButtonRelease:
                 self.start = None
 
 
 FreedoWM = FreedoWM()
-FreedoWM.main_loop()
+try:
+    FreedoWM.main_loop()
+except Exception as err:
+    FreedoWM.log(str(err))
