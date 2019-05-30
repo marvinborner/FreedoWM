@@ -168,9 +168,10 @@ class FreedoWM(object):
                     self.program_stack_index += 1
                 active_window = self.program_stack[self.program_stack_index]
                 active_window.configure(stack_mode=X.Above)
-                print(self.program_stack_index)
-                print(len(self.program_stack))
-                self.root.warp_pointer(active_window.get_geometry().x, active_window.get_geometry().y)
+                self.root.warp_pointer(
+                    int(active_window.get_geometry().x + active_window.get_geometry().width / 2),
+                    int(active_window.get_geometry().y + active_window.get_geometry().height / 2)
+                )
 
             # Close window (MOD + Q)
             elif self.is_key(self.keys["CLOSE"]) and self.window_focused():
