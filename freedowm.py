@@ -120,7 +120,8 @@ class FreedoWM(object):
         """
         self.log("UPDATE TILING")
         monitor = self.monitors[self.monitor_id]
-        width = round(monitor["width"] / (len(self.tiling_windows[self.monitor_id]) + 1))
+        count = (len(self.tiling_windows[self.monitor_id]))
+        width = 0 if count == 0 else round(monitor["width"] / count)
         for i, child in enumerate(self.root.query_tree().children):
             child.configure(
                 stack_mode=X.Above,
@@ -154,6 +155,7 @@ class FreedoWM(object):
                 self.program_stack.append(window)
                 self.program_stack_index = len(self.program_stack) - 1
                 if self.tiling_state:
+                    self.tiling_windows[self.monitor_id].append(window)
                     self.update_tiling()
                     monitor_width = self.monitors[self.monitor_id]["width"]
                     self.root.warp_pointer(
@@ -173,6 +175,7 @@ class FreedoWM(object):
 
         # Remove closed window from stack
         if self.event.type == X.DestroyNotify:
+            self.log("CLOSE WINDOW")
             self.program_stack.remove(self.event.window)
             if self.tiling_state:
                 self.tiling_windows[self.monitor_id].remove(self.event.window)
@@ -254,8 +257,10 @@ class FreedoWM(object):
                 if not self.tiling_state:
                     for i in range(self.display.screen_count() + 1):
                         self.tiling_windows.append([])
-                    self.update_tiling()
-                    self.tiling_state = True
+                    if self.window_focused():
+                        self.tiling_windows[self.monitor_id].append(self.event.child)
+                        self.update_tiling()
+                        self.tiling_state = True
                 else:
                     self.tiling_windows = []
                     self.tiling_state = False
