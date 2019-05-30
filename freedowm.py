@@ -34,7 +34,7 @@ class FreedoWM(object):
         self.program_stack = []
         self.program_stack_index = -1
         self.monitors = []
-        self.monitor_id = self.zero_coordinate = 0
+        self.monitor_id = self.zero_coordinate = self.x_center = self.y_center = 0
 
         self.NET_WM_NAME = self.display.intern_atom('_NET_WM_NAME')
         self.NET_ACTIVE_WINDOW = self.display.intern_atom('_NET_ACTIVE_WINDOW')
@@ -113,6 +113,28 @@ class FreedoWM(object):
             child.configure(border_width=int(self.general["BORDER"]))
             child.change_attributes(None, border_pixel=border_color)
 
+    def center_window(self, window):
+        if self.root.query_pointer().root_x > self.monitors[0]["width"]:
+            self.monitor_id = 1
+            self.zero_coordinate = self.monitors[0]["width"]
+            self.x_center = round(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
+            self.y_center = round(self.monitors[1]["height"] / 2)
+        else:
+            self.x_center = round(self.monitors[0]["width"] / 2)
+            self.y_center = round(self.monitors[0]["height"] / 2)
+
+        window.configure(
+            width=round(self.monitors[self.monitor_id]["width"] / 2),
+            height=round(self.monitors[self.monitor_id]["height"] / 2),
+        )
+
+        window.configure(
+            x=self.x_center - round(window.get_geometry().width / 2),
+            y=self.y_center - round(window.get_geometry().height / 2),
+        )
+        window.configure(stack_mode=X.Above)
+        self.root.warp_pointer(self.x_center, self.y_center)
+
     def update_tiling(self):
         """
         Updated/rearranges the tiling scene
@@ -144,14 +166,6 @@ class FreedoWM(object):
             if not self.ignore_actions:
                 self.log("NEW WINDOW")
                 window = self.event.window
-                if self.root.query_pointer().root_x > self.monitors[0]["width"]:
-                    self.monitor_id = 1
-                    self.zero_coordinate = self.monitors[0]["width"]
-                    x_center = round(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
-                    y_center = round(self.monitors[1]["height"] / 2)
-                else:
-                    x_center = round(self.monitors[0]["width"] / 2)
-                    y_center = round(self.monitors[0]["height"] / 2)
                 self.program_stack.append(window)
                 self.program_stack_index = len(self.program_stack) - 1
                 if self.tiling_state:
@@ -161,15 +175,10 @@ class FreedoWM(object):
                     self.root.warp_pointer(
                         round(self.zero_coordinate + monitor_width -
                               (monitor_width / len(self.tiling_windows[self.monitor_id]) + 1) / 2),
-                        y_center
+                        self.y_center
                     )
                 else:
-                    window.configure(
-                        x=x_center - round(window.get_geometry().width / 2),
-                        y=y_center - round(window.get_geometry().height / 2),
-                    )
-                    window.configure(stack_mode=X.Above)
-                    self.root.warp_pointer(x_center, y_center)
+                    self.center_window(window)
             else:
                 self.ignore_actions = False
 
@@ -232,10 +241,10 @@ class FreedoWM(object):
                 x_diff = self.event.root_x - self.start.root_x
                 y_diff = self.event.root_y - self.start.root_y
                 self.start.child.configure(
-                    x=attribute.x + (self.start.detail == 1 and x_diff or 0),
-                    y=attribute.y + (self.start.detail == 1 and y_diff or 0),
                     width=max(1, attribute.width + (self.start.detail == 3 and x_diff or 0)),
-                    height=max(1, attribute.height + (self.start.detail == 3 and y_diff or 0))
+                    height=max(1, attribute.height + (self.start.detail == 3 and y_diff or 0)),
+                    x=attribute.x + (self.start.detail == 1 and x_diff or 0),
+                    y=attribute.y + (self.start.detail == 1 and y_diff or 0)
                 )
 
             # Cycle between windows (MOD + Tab) // X11's "tab" keysym is 0, but it's 23
@@ -264,6 +273,25 @@ class FreedoWM(object):
                 else:
                     self.tiling_windows = []
                     self.tiling_state = False
+
+            # Toggle maximization (MOD + M)
+            elif self.is_key(self.keys["MAX"]):
+                if self.window_focused():
+                    full_width = self.monitors[self.monitor_id]["width"] - 2 * int(self.general["BORDER"])
+                    full_height = self.monitors[self.monitor_id]["height"] - 2 * int(self.general["BORDER"])
+
+                    if self.event.child.get_geometry().width == full_width \
+                            and self.event.child.get_geometry().height == full_height \
+                            and self.event.child.get_geometry().x == self.zero_coordinate \
+                            and self.event.child.get_geometry().y == 0:
+                        self.center_window(self.event.child)
+                    else:
+                        self.event.child.configure(
+                            width=full_width,
+                            height=full_height,
+                            x=self.zero_coordinate,
+                            y=0
+                        )
 
             # Close window (MOD + Q)
             elif self.is_key(self.keys["CLOSE"]) and self.window_focused():
