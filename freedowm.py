@@ -120,6 +120,7 @@ class FreedoWM(object):
             self.x_center = round(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
             self.y_center = round(self.monitors[1]["height"] / 2)
         else:
+            self.monitor_id = 0
             self.x_center = round(self.monitors[0]["width"] / 2)
             self.y_center = round(self.monitors[0]["height"] / 2)
 
@@ -261,7 +262,7 @@ class FreedoWM(object):
                     round(active_window.get_geometry().y + active_window.get_geometry().height / 2)
                 )
 
-            # Toggle tiling state (MOD + t)
+            # Toggle tiling state (MOD + T)
             elif self.is_key(self.keys["TILE"]):
                 if not self.tiling_state:
                     for i in range(self.display.screen_count() + 1):
@@ -293,6 +294,10 @@ class FreedoWM(object):
                             y=0
                         )
 
+            # Center window (MOD + C)
+            elif self.is_key(self.keys["CENTER"]) and self.window_focused():
+                self.center_window(self.event.child)
+
             # Close window (MOD + Q)
             elif self.is_key(self.keys["CLOSE"]) and self.window_focused():
                 self.event.child.destroy()
@@ -306,7 +311,7 @@ class FreedoWM(object):
                 self.ignore_actions = True
                 os.system(self.programs["MENU"] + " &")
 
-            # Exit window manager (MOD + C)
+            # Exit window manager (MOD + P)
             elif self.is_key(self.keys["QUIT"]):
                 self.display.close()
 
