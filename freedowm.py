@@ -31,7 +31,7 @@ class FreedoWM(object):
         self.program_stack = []
         self.program_stack_index = -1
         self.monitors = []
-        self.monitor_id, self.zero_coordinate = 0, 0
+        self.monitor_id = self.zero_coordinate = 0
 
         self.NET_WM_NAME = self.display.intern_atom('_NET_WM_NAME')
         self.NET_ACTIVE_WINDOW = self.display.intern_atom('_NET_ACTIVE_WINDOW')
@@ -122,10 +122,10 @@ class FreedoWM(object):
                     )
                 else:
                     window.configure(
-                        stack_mode=X.Above,
                         x=x_center - round(window.get_geometry().width / 2),
                         y=y_center - round(window.get_geometry().height / 2),
                     )
+                    window.configure(stack_mode=X.Above)
                     self.root.warp_pointer(x_center, y_center)
             else:
                 self.ignore_actions = False
@@ -136,6 +136,13 @@ class FreedoWM(object):
             if self.tiling_state:
                 self.tiling_windows[self.monitor_id].remove(self.event.window)
                 self.update_tiling()
+            elif len(self.program_stack) > 0:
+                focused_window = self.program_stack[0]
+                focused_window.configure(stack_mode=X.Above)
+                self.root.warp_pointer(
+                    round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
+                    round(focused_window.get_geometry().y + focused_window.get_geometry().height / 2)
+                )
 
         # Set focused window "in focus"
         if self.window_focused() and not self.ignore_actions:
