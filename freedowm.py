@@ -84,12 +84,11 @@ class FreedoWM(object):
     def update_tiling(self):
         self.log("UPDATE TILING")
         monitor = self.monitors[self.monitor_id]
-        tiling_num = len(self.tiling_windows[self.monitor_id]) + 1
-        width = round(monitor["width"] / tiling_num) - 2 * int(self.general["BORDER"])
+        width = round(monitor["width"] / (len(self.tiling_windows[self.monitor_id]) + 1))
         for i, child in enumerate(self.root.query_tree().children):
             child.configure(
                 stack_mode=X.Above,
-                width=width,
+                width=width - 2 * int(self.general["BORDER"]),
                 height=monitor["height"] - 2 * int(self.general["BORDER"]),
                 x=self.zero_coordinate + width * i,
                 y=0,
@@ -117,13 +116,19 @@ class FreedoWM(object):
                 self.program_stack_index = len(self.program_stack) - 1
                 if self.tiling_state:
                     self.update_tiling()
+                    monitor_width = self.monitors[self.monitor_id]["width"]
+                    self.root.warp_pointer(
+                        round(self.zero_coordinate + monitor_width -
+                              (monitor_width / len(self.tiling_windows[self.monitor_id]) + 1) / 2),
+                        y_center
+                    )
                 else:
                     window.configure(
                         stack_mode=X.Above,
                         x=x_center - round(window.get_geometry().width / 2),
                         y=y_center - round(window.get_geometry().height / 2),
                     )
-                self.root.warp_pointer(x_center, y_center)
+                    self.root.warp_pointer(x_center, y_center)
             else:
                 self.ignore_actions = False
 
@@ -142,7 +147,7 @@ class FreedoWM(object):
                 self.currently_focused = self.event.child
                 self.currently_focused.configure(stack_mode=X.Above)
                 self.program_stack_index = self.program_stack.index(self.currently_focused)
-            elif self.root.query_pointer().child != self.currently_focused:
+            elif self.root.query_pointer().child not in (self.currently_focused, X.NONE):
                 new_focus = True
                 self.currently_focused = self.root.query_pointer().child
                 self.currently_focused.configure(stack_mode=X.Above)
