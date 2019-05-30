@@ -102,6 +102,9 @@ class FreedoWM(object):
             else:
                 self.ignore_actions = False
 
+        if self.event.type == X.DestroyNotify:
+            self.program_stack.remove(self.event.window)
+
         # Set focused window "in focus"
         if self.window_focused() and not self.ignore_actions:
             if hasattr(self.event, "child") and self.event.child != X.NONE \
@@ -159,7 +162,7 @@ class FreedoWM(object):
             # Cycle between windows (MOD + Tab) // X11's "tab" keysym is 0, but it's 23
             if self.event.type == X.KeyPress and self.event.detail == int(self.keys["CYCLE"]) \
                     and len(self.program_stack) > 0:
-                if self.program_stack_index + 1 == len(self.program_stack):
+                if self.program_stack_index + 1 >= len(self.program_stack):
                     self.program_stack_index = 0
                 else:
                     self.program_stack_index += 1
