@@ -11,7 +11,7 @@ setup(
     version="0.1.dev0",
     description="A free window manager",
     license="BSD",
-    author="melvin",
+    author="Marvin Borner",
     install_requires="Xlib",
     py_modules=["freedowm"],
     entry_points={

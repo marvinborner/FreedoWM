@@ -10,6 +10,9 @@ from Xlib.ext import randr
 
 class FreedoWM(object):
     def __init__(self):
+        """
+        Initializes several class-level variables
+        """
         self.config = configparser.ConfigParser()
         self.config.read(os.environ['HOME'] + "/.config/freedowm.ini")
         self.general = self.config["GENERAL"]
@@ -39,6 +42,11 @@ class FreedoWM(object):
         self.get_monitors()
 
     def set_listeners(self):
+        """
+        Gets executed at program start - sets the initial listener masks
+        :return:
+        """
+
         # Listen for window changes
         self.root.change_attributes(
             event_mask=X.PropertyChangeMask | X.FocusChangeMask | X.StructureNotifyMask | X.SubstructureNotifyMask | X.PointerMotionMask
@@ -53,10 +61,19 @@ class FreedoWM(object):
                               X.GrabModeAsync, X.GrabModeAsync, X.NONE, X.NONE)
 
     def log(self, message):
+        """
+        Logging utility - only logs when it's enabled in the config
+        :param message: The message being logged
+        :return:
+        """
         if self.general["DEBUG"] != "0":
             print(message)
 
     def get_monitors(self):
+        """
+        Gets/sets your monitor setup using the Xlib xrandr helper functions
+        :return:
+        """
         window = self.root.create_window(0, 0, 1, 1, 1, self.screen.root_depth)
         res = randr.get_screen_resources(window).outputs
 
@@ -69,19 +86,38 @@ class FreedoWM(object):
         window.destroy()
 
     def is_key(self, key_name):
+        """
+        Checks whether a key has been pressed
+        :param key_name: The key that should be checked
+        :return:
+        """
         return self.event.type == X.KeyPress \
                and self.event.detail == self.display.keysym_to_keycode(XK.string_to_keysym(key_name))
 
     def window_focused(self):
+        """
+        Checks whether the pointer hovers a window or the event has a child
+        :return:
+        """
         return hasattr(self.event, "child") and self.event.child != X.NONE or self.root.query_pointer().child != 0
 
     def set_border(self, child, color):
+        """
+        Sets a border to the requested window
+        :param child: The requested window child
+        :param color: The requested color as string (HEX)
+        :return:
+        """
         if child is not None and child is not X.NONE:
             border_color = self.colormap.alloc_named_color(color).pixel
             child.configure(border_width=int(self.general["BORDER"]))
             child.change_attributes(None, border_pixel=border_color)
 
     def update_tiling(self):
+        """
+        Updated/rearranges the tiling scene
+        :return:
+        """
         self.log("UPDATE TILING")
         monitor = self.monitors[self.monitor_id]
         width = round(monitor["width"] / (len(self.tiling_windows[self.monitor_id]) + 1))
@@ -97,6 +133,11 @@ class FreedoWM(object):
                 self.tiling_windows[self.monitor_id].append(child)
 
     def update_windows(self):
+        """
+        Handles several window events
+        :return:
+        """
+
         # Configure new window
         if self.event.type == X.CreateNotify:
             if not self.ignore_actions:
@@ -168,8 +209,11 @@ class FreedoWM(object):
 
         self.display.sync()
 
-    # Check for actions until exit
     def main_loop(self):
+        """
+        Loops until the program is closed - handles keyboard, window and mouse events
+        :return:
+        """
         self.set_listeners()
         while 1:
             self.event = self.display.next_event()
