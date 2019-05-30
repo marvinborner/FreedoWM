@@ -25,6 +25,7 @@ class FreedoWM(object):
         self.currently_focused = None
         self.tiling_state = False
         self.start = None
+        self.ignore_actions = False
         self.monitors = []
 
         self.NET_WM_NAME = self.display.intern_atom('_NET_WM_NAME')
@@ -79,24 +80,28 @@ class FreedoWM(object):
         new_focus = False
 
         if self.event.type == X.CreateNotify:
-            self.log("NEW WINDOW")
-            window = self.event.window
-            if self.root.query_pointer().root_x > self.monitors[0]["width"]:
-                x_center = int(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
-                y_center = int(self.monitors[1]["height"] / 2)
+            if not self.ignore_actions:
+                self.log("NEW WINDOW")
+                window = self.event.window
+                if self.root.query_pointer().root_x > self.monitors[0]["width"]:
+                    x_center = int(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
+                    y_center = int(self.monitors[1]["height"] / 2)
+                else:
+                    x_center = int(self.monitors[0]["width"] / 2)
+                    y_center = int(self.monitors[0]["height"] / 2)
+                self.root.warp_pointer(x_center, y_center)
+                window.configure(
+                    stack_mode=X.Above,
+                    x=x_center - int(window.get_geometry().width / 2),
+                    y=y_center - int(window.get_geometry().height / 2),
+                )
             else:
-                x_center = int(self.monitors[0]["width"] / 2)
-                y_center = int(self.monitors[0]["height"] / 2)
-            self.root.warp_pointer(x_center, y_center)
-            window.configure(
-                stack_mode=X.Above,
-                x=x_center - int(window.get_geometry().width / 2),
-                y=y_center - int(window.get_geometry().height / 2),
-            )
+                self.ignore_actions = False
 
         # Set focused window "in focus"
-        if self.window_focused():
-            if hasattr(self.event, "child") and self.event.child != self.currently_focused:
+        if self.window_focused() and not self.ignore_actions:
+            if hasattr(self.event, "child") and self.event.child != X.NONE \
+                    and self.event.child != self.currently_focused:
                 new_focus = True
                 self.currently_focused = self.event.child
                 self.event.child.configure(stack_mode=X.Above)
@@ -106,13 +111,13 @@ class FreedoWM(object):
                 self.root.query_pointer().child.configure(stack_mode=X.Above)
 
         # Set all windows to un-focused borders
-        if self.event.type == X.FocusOut or new_focus:
+        if self.event.type == X.FocusOut and not self.ignore_actions or new_focus:
             for child in self.root.query_tree().children:
                 self.log("RESET BORDERS")
                 self.set_border(child, self.colors["INACTIVE_BORDER"])
 
         # Set focused window border
-        if self.event.type == X.FocusIn or new_focus:
+        if self.event.type == X.FocusIn and not self.ignore_actions or new_focus:
             child = self.root.query_pointer().child
             self.currently_focused = child
             if child != 0:
@@ -159,6 +164,7 @@ class FreedoWM(object):
 
             # Open dmenu (MOD + D)
             elif self.is_key(self.keys["MENU"]):
+                self.ignore_actions = True
                 os.system(self.programs["MENU"] + " &")
 
             # Exit window manager (MOD + C)
