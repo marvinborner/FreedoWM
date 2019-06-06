@@ -33,6 +33,7 @@ class FreedoWM(object):
         self.tiling_windows = []
         self.start = None
         self.ignore_actions = False
+        self.startup = True
         self.program_stack = []
         self.program_stack_index = -1
         self.monitors = []
@@ -51,7 +52,11 @@ class FreedoWM(object):
 
         # Listen for window changes
         self.root.change_attributes(
-            event_mask=X.PropertyChangeMask | X.FocusChangeMask | X.StructureNotifyMask | X.SubstructureNotifyMask | X.PointerMotionMask
+            event_mask=X.PropertyChangeMask |
+                       X.FocusChangeMask |
+                       X.StructureNotifyMask |
+                       X.SubstructureNotifyMask |
+                       X.PointerMotionMask
         )
 
         # Keyboard listener
@@ -76,19 +81,16 @@ class FreedoWM(object):
         Gets/sets your monitor setup using the Xlib xrandr helper functions
         :return:
         """
-        try:
-            window = self.root.create_window(0, 0, 1, 1, 1, self.screen.root_depth)
-            res = randr.get_screen_resources(window).outputs
+        window = self.root.create_window(0, 0, 1, 1, 1, self.screen.root_depth)
+        res = randr.get_screen_resources(window).outputs
 
-            for i in range(self.display.screen_count() + 1):
-                info = randr.get_output_info(window, res[i], 0)
-                crtc_info = randr.get_crtc_info(window, info.crtc, 0)
-                self.monitors.append({"width": crtc_info.width, "height": crtc_info.height})
+        for i in range(self.display.screen_count() + 1):
+            info = randr.get_output_info(window, res[i], 0)
+            crtc_info = randr.get_crtc_info(window, info.crtc, 0)
+            self.monitors.append({"width": crtc_info.width, "height": crtc_info.height})
 
-            self.log(self.monitors)
-            window.destroy()
-        except (error.BadWindow, error.BadDrawable):
-            self.log("BAD WINDOW OR DRAWABLE!")
+        self.log(self.monitors)
+        window.destroy()
 
     def is_key(self, key_name):
         """
@@ -96,8 +98,8 @@ class FreedoWM(object):
         :param key_name: The key that should be checked
         :return:
         """
-        return self.event.type == X.KeyPress \
-               and self.event.detail == self.display.keysym_to_keycode(XK.string_to_keysym(key_name))
+        return self.event.type == X.KeyPress and \
+               self.event.detail == self.display.keysym_to_keycode(XK.string_to_keysym(key_name))
 
     def window_focused(self):
         """
@@ -141,7 +143,7 @@ class FreedoWM(object):
         """
         self.log("UPDATE TILING")
         monitor = self.monitors[self.monitor_id]
-        count = (len(self.tiling_windows[self.monitor_id]))
+        count = len(self.tiling_windows[self.monitor_id])
         width = 0 if count == 0 else round(monitor["width"] / count)
         for i, child in enumerate(self.root.query_tree().children):
             child.configure(
@@ -227,8 +229,9 @@ class FreedoWM(object):
                 self.program_stack_index = self.program_stack.index(self.currently_focused)
 
         # Update current monitor
-        if self.event.type == X.NotifyPointerRoot:
-            self.log("UPDATE MONITOR ID")
+        if self.event.type == X.NotifyPointerRoot or self.startup:
+            self.startup = False
+            previous = self.monitor_id
             if self.root.query_pointer().root_x > self.monitors[0]["width"]:
                 self.monitor_id = 1
                 self.zero_coordinate = self.monitors[0]["width"]
@@ -238,6 +241,8 @@ class FreedoWM(object):
                 self.monitor_id = 0
                 self.x_center = round(self.monitors[0]["width"] / 2)
                 self.y_center = round(self.monitors[0]["height"] / 2)
+            if previous != self.monitor_id:
+                self.log("UPDATE MONITOR ID: " + str(self.monitor_id))
 
         self.display.sync()
 
