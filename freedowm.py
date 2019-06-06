@@ -120,16 +120,6 @@ class FreedoWM(object):
 
     def center_window(self, window):
         try:
-            if self.root.query_pointer().root_x > self.monitors[0]["width"]:
-                self.monitor_id = 1
-                self.zero_coordinate = self.monitors[0]["width"]
-                self.x_center = round(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
-                self.y_center = round(self.monitors[1]["height"] / 2)
-            else:
-                self.monitor_id = 0
-                self.x_center = round(self.monitors[0]["width"] / 2)
-                self.y_center = round(self.monitors[0]["height"] / 2)
-
             window.configure(
                 width=round(self.monitors[self.monitor_id]["width"] / 2),
                 height=round(self.monitors[self.monitor_id]["height"] / 2),
@@ -189,27 +179,28 @@ class FreedoWM(object):
                         )
                     else:
                         self.center_window(window)
-                else:
-                    self.ignore_actions = False
             except (error.BadWindow, error.BadDrawable):
                 self.log("BAD WINDOW OR DRAWABLE!")
 
         # Remove closed window from stack
         if self.event.type == X.DestroyNotify:
             try:
-                self.log("CLOSE WINDOW")
-                if self.event.window in self.program_stack:
-                    self.program_stack.remove(self.event.window)
-                if self.tiling_state:
-                    self.tiling_windows[self.monitor_id].remove(self.event.window)
-                    self.update_tiling()
-                elif len(self.program_stack) > 0:
-                    focused_window = self.program_stack[0]
-                    focused_window.configure(stack_mode=X.Above)
-                    self.root.warp_pointer(
-                        round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
-                        round(focused_window.get_geometry().y + focused_window.get_geometry().height / 2)
-                    )
+                if not self.ignore_actions:
+                    self.log("CLOSE WINDOW")
+                    if self.event.window in self.program_stack:
+                        self.program_stack.remove(self.event.window)
+                    if self.tiling_state:
+                        self.tiling_windows[self.monitor_id].remove(self.event.window)
+                        self.update_tiling()
+                    elif len(self.program_stack) > 0:
+                        focused_window = self.program_stack[0]
+                        focused_window.configure(stack_mode=X.Above)
+                        self.root.warp_pointer(
+                            round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
+                            round(focused_window.get_geometry().y + focused_window.get_geometry().height / 2)
+                        )
+                elif self.ignore_actions:
+                    self.ignore_actions = False
             except (error.BadWindow, error.BadDrawable):
                 self.log("BAD WINDOW OR DRAWABLE!")
 
@@ -235,6 +226,19 @@ class FreedoWM(object):
                 self.currently_focused.configure(stack_mode=X.Above)
                 self.program_stack_index = self.program_stack.index(self.currently_focused)
 
+        # Update current monitor
+        if self.event.type == X.NotifyPointerRoot:
+            self.log("UPDATE MONITOR ID")
+            if self.root.query_pointer().root_x > self.monitors[0]["width"]:
+                self.monitor_id = 1
+                self.zero_coordinate = self.monitors[0]["width"]
+                self.x_center = round(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
+                self.y_center = round(self.monitors[1]["height"] / 2)
+            else:
+                self.monitor_id = 0
+                self.x_center = round(self.monitors[0]["width"] / 2)
+                self.y_center = round(self.monitors[0]["height"] / 2)
+
         self.display.sync()
 
     def main_loop(self):
@@ -243,6 +247,8 @@ class FreedoWM(object):
         :return:
         """
         self.set_listeners()
+        self.root.warp_pointer(0, 0)
+
         while 1:
             self.event = self.display.next_event()
             self.update_windows()
