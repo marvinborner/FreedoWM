@@ -22,6 +22,7 @@ class FreedoWM(object):
         self.colors = self.config["COLORS"]
         self.programs = self.config["PROGRAMS"]
         self.mod = X.Mod1Mask if self.keys["MOD"] == "alt" else X.Mod4Mask
+        self.shift_mask = False
 
         self.display = Display()
         self.screen = self.display.screen()
@@ -210,11 +211,8 @@ class FreedoWM(object):
             try:
                 if not self.ignore_actions:
                     self.log("CLOSE WINDOW")
-                    if {"window": self.event.window, "tag": self.current_tag} \
-                            in self.program_stack:
-                        self.program_stack.remove(
-                            {"window": self.event.window, "tag": self.current_tag}
-                        )
+                    if {"window": self.event.window, "tag": self.current_tag} in self.program_stack:
+                        self.program_stack.remove({"window": self.event.window, "tag": self.current_tag})
                     if self.tiling_state:
                         self.tiling_windows[self.monitor_id].remove(self.event.window)
                         self.update_tiling()
@@ -302,8 +300,12 @@ class FreedoWM(object):
                     y=attribute.y + (self.start.detail == 1 and y_diff or 0)
                 )
 
+            # Toggle the shift mask identifier
+            elif (self.event.type == X.KeyPress or self.event.type == X.KeyRelease) and self.event.detail == 50:
+                self.shift_mask = not self.shift_mask
+
             # Cycle between windows (MOD + Tab) // X11's "tab" keysym is 0, but it's 23
-            if self.event.type == X.KeyPress and self.event.detail == int(self.keys["CYCLE"]) \
+            elif self.event.type == X.KeyPress and self.event.detail == int(self.keys["CYCLE"]) \
                     and len(self.program_stack) > 0:
                 if self.program_stack_index + 1 >= len(self.program_stack):
                     self.program_stack_index = 0
@@ -372,13 +374,20 @@ class FreedoWM(object):
                 self.display.close()
                 sys.exit()
 
+            # Display tag or move window to tag with shift mask
             elif self.event.type == X.KeyPress and self.event.detail in \
                     [self.to_key(self.keys["TAG0"]), self.to_key(self.keys["TAG1"]), self.to_key(self.keys["TAG2"]),
                      self.to_key(self.keys["TAG3"]), self.to_key(self.keys["TAG4"]), self.to_key(self.keys["TAG5"]),
                      self.to_key(self.keys["TAG6"]), self.to_key(self.keys["TAG7"]), self.to_key(self.keys["TAG8"])]:
-                self.current_tag = int(XK.keysym_to_string(self.display.keycode_to_keysym(self.event.detail, 0)))
-                self.log("SHIFT TAG TO " + str(self.current_tag))
-                self.update_tags()
+                new_tag = int(XK.keysym_to_string(self.display.keycode_to_keysym(self.event.detail, 0)))
+                if not self.shift_mask:
+                    self.log("SHIFT TAG TO " + str(self.current_tag))
+                    self.current_tag = new_tag
+                    self.update_tags()
+                elif self.window_focused():
+                    self.log("MODIFY WINDOW TAG " + str(self.current_tag))
+                    self.program_stack[self.program_stack_index]["tag"] = new_tag
+                    self.update_tags()
 
             elif self.event.type == X.ButtonRelease:
                 self.start = None
