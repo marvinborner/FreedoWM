@@ -36,6 +36,7 @@ class FreedoWM(object):
         self.startup = True
         self.program_stack = []
         self.program_stack_index = -1
+        self.current_tag = 1
         self.monitors = []
         self.monitor_id = self.zero_coordinate = self.x_center = self.y_center = 0
 
@@ -92,14 +93,21 @@ class FreedoWM(object):
         self.log(self.monitors)
         window.destroy()
 
+    def to_key(self, key_name):
+        """
+        Returns the keycode of the requested key
+        :param key_name: The key as string (e.g. "T")
+        :return:
+        """
+        return self.display.keysym_to_keycode(XK.string_to_keysym(key_name))
+
     def is_key(self, key_name):
         """
         Checks whether a key has been pressed
         :param key_name: The key that should be checked
         :return:
         """
-        return self.event.type == X.KeyPress and \
-               self.event.detail == self.display.keysym_to_keycode(XK.string_to_keysym(key_name))
+        return self.event.type == X.KeyPress and self.event.detail == self.to_key(key_name)
 
     def window_focused(self):
         """
@@ -156,6 +164,19 @@ class FreedoWM(object):
             if child not in self.tiling_windows[self.monitor_id]:
                 self.tiling_windows[self.monitor_id].append(child)
 
+    def update_tags(self):
+        """
+        Updates the appearance of different tags/desktops
+        :return:
+        """
+        for program in self.program_stack:
+            if program["tag"] == self.current_tag:
+                self.log("SHOW WINDOW")
+                program["window"].map()
+            else:
+                self.log("HIDE WINDOW")
+                program["window"].unmap()
+
     def update_windows(self):
         """
         Handles several window events
@@ -168,7 +189,7 @@ class FreedoWM(object):
                 if not self.ignore_actions:
                     self.log("NEW WINDOW")
                     window = self.event.window
-                    self.program_stack.append(window)
+                    self.program_stack.append({"window": window, "tag": self.current_tag})
                     self.program_stack_index = len(self.program_stack) - 1
                     if self.tiling_state:
                         self.tiling_windows[self.monitor_id].append(window)
@@ -189,13 +210,16 @@ class FreedoWM(object):
             try:
                 if not self.ignore_actions:
                     self.log("CLOSE WINDOW")
-                    if self.event.window in self.program_stack:
-                        self.program_stack.remove(self.event.window)
+                    if {"window": self.event.window, "tag": self.current_tag} \
+                            in self.program_stack:
+                        self.program_stack.remove(
+                            {"window": self.event.window, "tag": self.current_tag}
+                        )
                     if self.tiling_state:
                         self.tiling_windows[self.monitor_id].remove(self.event.window)
                         self.update_tiling()
                     elif len(self.program_stack) > 0:
-                        focused_window = self.program_stack[0]
+                        focused_window = self.program_stack[0]["window"]
                         focused_window.configure(stack_mode=X.Above)
                         self.root.warp_pointer(
                             round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
@@ -217,7 +241,9 @@ class FreedoWM(object):
                 self.currently_focused = self.event.child
                 self.set_border(self.currently_focused, self.colors["ACTIVE_BORDER"])
                 self.currently_focused.configure(stack_mode=X.Above)
-                self.program_stack_index = self.program_stack.index(self.currently_focused)
+                self.program_stack_index = self.program_stack.index(
+                    {"window": self.currently_focused, "tag": self.current_tag}
+                )
             elif self.root.query_pointer().child not in (self.currently_focused, X.NONE):
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
@@ -226,7 +252,9 @@ class FreedoWM(object):
                 self.currently_focused = self.root.query_pointer().child
                 self.set_border(self.currently_focused, self.colors["ACTIVE_BORDER"])
                 self.currently_focused.configure(stack_mode=X.Above)
-                self.program_stack_index = self.program_stack.index(self.currently_focused)
+                self.program_stack_index = self.program_stack.index(
+                    {"window": self.currently_focused, "tag": self.current_tag}
+                )
 
         # Update current monitor
         if self.event.type == X.NotifyPointerRoot or self.startup:
@@ -281,7 +309,9 @@ class FreedoWM(object):
                     self.program_stack_index = 0
                 else:
                     self.program_stack_index += 1
-                active_window = self.program_stack[self.program_stack_index]
+                self.current_tag = self.program_stack[self.program_stack_index]["tag"]
+                self.update_tags()
+                active_window = self.program_stack[self.program_stack_index]["window"]
                 active_window.configure(stack_mode=X.Above)
                 self.root.warp_pointer(
                     round(active_window.get_geometry().x + active_window.get_geometry().width / 2),
@@ -341,6 +371,14 @@ class FreedoWM(object):
             elif self.is_key(self.keys["QUIT"]):
                 self.display.close()
                 sys.exit()
+
+            elif self.event.type == X.KeyPress and self.event.detail in \
+                    [self.to_key(self.keys["TAG0"]), self.to_key(self.keys["TAG1"]), self.to_key(self.keys["TAG2"]),
+                     self.to_key(self.keys["TAG3"]), self.to_key(self.keys["TAG4"]), self.to_key(self.keys["TAG5"]),
+                     self.to_key(self.keys["TAG6"]), self.to_key(self.keys["TAG7"]), self.to_key(self.keys["TAG8"])]:
+                self.current_tag = int(XK.keysym_to_string(self.display.keycode_to_keysym(self.event.detail, 0)))
+                self.log("SHIFT TAG TO " + str(self.current_tag))
+                self.update_tags()
 
             elif self.event.type == X.ButtonRelease:
                 self.start = None
