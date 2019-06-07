@@ -33,18 +33,17 @@ class FreedoWM(object):
         self.tiling_state = False
         self.tiling_windows = []
         self.start = None
-        self.ignore_actions = False
+        self.ignore_actions = self.new_bar = False
         self.startup = True
         self.program_stack = []
-        self.program_stack_index = -1
+        self.program_stack_index = self.bar = -1
         self.current_tag = 1
         self.monitors = []
         self.monitor_id = self.zero_coordinate = self.x_center = self.y_center = 0
 
-        self.NET_WM_NAME = self.display.intern_atom('_NET_WM_NAME')
-        self.NET_ACTIVE_WINDOW = self.display.intern_atom('_NET_ACTIVE_WINDOW')
-
         self.get_monitors()
+        self.set_listeners()
+        self.root.warp_pointer(0, 0)
 
     def set_listeners(self):
         """
@@ -129,6 +128,28 @@ class FreedoWM(object):
             child.configure(border_width=int(self.general["BORDER"]))
             child.change_attributes(None, border_pixel=border_color)
 
+    def toggle_bar(self):
+        """
+        Toggles the status bar on the current monitor
+        :return:
+        """
+        if self.bar == -1:
+            self.new_bar = True
+            self.bar = self.root.create_window(
+                self.zero_coordinate,  # x
+                0,  # y
+                self.monitors[self.monitor_id]["width"],  # width
+                15,  # height
+                0,  # border
+                X.CopyFromParent, X.RetainPermanent, X.CopyFromParent,
+                background_pixel=self.screen.black_pixel
+            )
+            self.bar.change_attributes(override_redirect=True)
+            self.bar.map()
+        else:
+            self.bar.destroy()
+            self.bar = -1
+
     def center_window(self, window):
         try:
             window.configure(
@@ -187,7 +208,7 @@ class FreedoWM(object):
         # Configure new window
         if self.event.type == X.CreateNotify:
             try:
-                if not self.ignore_actions:
+                if not self.ignore_actions and not self.new_bar:
                     self.log("NEW WINDOW")
                     window = self.event.window
                     self.program_stack.append({"window": window, "tag": self.current_tag})
@@ -203,13 +224,16 @@ class FreedoWM(object):
                         )
                     else:
                         self.center_window(window)
+                elif self.new_bar:
+                    self.new_bar = False
             except (error.BadWindow, error.BadDrawable):
                 self.log("BAD WINDOW OR DRAWABLE!")
 
         # Remove closed window from stack
         if self.event.type == X.DestroyNotify:
             try:
-                if not self.ignore_actions:
+                if not self.ignore_actions \
+                        and {"window": self.event.window, "tag": self.current_tag} in self.program_stack:
                     self.log("CLOSE WINDOW")
                     if {"window": self.event.window, "tag": self.current_tag} in self.program_stack:
                         self.program_stack.remove({"window": self.event.window, "tag": self.current_tag})
@@ -231,7 +255,8 @@ class FreedoWM(object):
         # Set focused window "in focus"
         if self.window_focused() and not self.ignore_actions:
             if hasattr(self.event, "child") and self.event.child != X.NONE \
-                    and self.event.child != self.currently_focused:
+                    and self.event.child != self.currently_focused \
+                    and {"window": self.event.child, "tag": self.current_tag} in self.program_stack:
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
@@ -242,7 +267,8 @@ class FreedoWM(object):
                 self.program_stack_index = self.program_stack.index(
                     {"window": self.currently_focused, "tag": self.current_tag}
                 )
-            elif self.root.query_pointer().child not in (self.currently_focused, X.NONE):
+            elif self.root.query_pointer().child not in (self.currently_focused, X.NONE) \
+                    and {"window": self.root.query_pointer().child, "tag": self.current_tag} in self.program_stack:
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
@@ -277,20 +303,19 @@ class FreedoWM(object):
         Loops until the program is closed - handles keyboard, window and mouse events
         :return:
         """
-        self.set_listeners()
-        self.root.warp_pointer(0, 0)
-
         while 1:
             self.event = self.display.next_event()
             self.update_windows()
 
             # Move window (MOD + left click)
-            if self.event.type == X.ButtonPress and self.event.child != X.NONE:
+            if self.event.type == X.ButtonPress and self.event.child != X.NONE \
+                    and {"window": self.event.child, "tag": self.current_tag} in self.program_stack:
                 attribute = self.event.child.get_geometry()
                 self.start = self.event
 
             # Resize window (MOD + right click)
-            elif self.event.type == X.MotionNotify and self.start:
+            elif self.event.type == X.MotionNotify and self.start \
+                    and {"window": self.event.child, "tag": self.current_tag} in self.program_stack:
                 x_diff = self.event.root_x - self.start.root_x
                 y_diff = self.event.root_y - self.start.root_y
                 self.start.child.configure(
@@ -369,6 +394,10 @@ class FreedoWM(object):
                 self.ignore_actions = True
                 os.system(self.programs["MENU"] + " &")
 
+            # Toggle status bar (MOD + B)
+            elif self.is_key(self.keys["BAR"]):
+                self.toggle_bar()
+
             # Exit window manager (MOD + P)
             elif self.is_key(self.keys["QUIT"]):
                 self.display.close()
@@ -394,7 +423,4 @@ class FreedoWM(object):
 
 
 FreedoWM = FreedoWM()
-try:
-    FreedoWM.main_loop()
-except Exception as err:
-    FreedoWM.log(str(err))
+FreedoWM.main_loop()
