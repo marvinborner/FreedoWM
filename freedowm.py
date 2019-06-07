@@ -41,6 +41,12 @@ class FreedoWM(object):
         self.monitors = []
         self.monitor_id = self.zero_coordinate = self.x_center = self.y_center = 0
 
+        # Set cursor
+        font = self.display.open_font('cursor')
+        cursor = font.create_glyph_cursor(font, int(self.general["CURSOR"]), int(self.general["CURSOR"]) + 1,
+                                          (65535, 65535, 65535), (0, 0, 0))
+        self.root.change_attributes(cursor=cursor)
+
         self.get_monitors()
         self.set_listeners()
         self.root.warp_pointer(0, 0)
