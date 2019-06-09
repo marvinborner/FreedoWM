@@ -40,6 +40,7 @@ class FreedoWM(object):
         self.current_tag = 1
         self.monitors = []
         self.monitor_id = self.zero_coordinate = self.x_center = self.y_center = 0
+        self.monitor_count = 1
 
         # Set cursor
         font = self.display.open_font('cursor')
@@ -90,10 +91,9 @@ class FreedoWM(object):
         """
         window = self.root.create_window(0, 0, 1, 1, 1, self.screen.root_depth)
         res = randr.get_screen_resources(window).outputs
-        self.log(self.display.screen_count())
-        screen_count = self.display.screen_count() + 1 \
+        self.monitor_count = self.display.screen_count() + 1 \
                 if self.display.screen_count() > 1 else self.display.screen_count()
-        for i in range(screen_count):
+        for i in range(self.monitor_count):
             info = randr.get_output_info(window, res[i], 0)
             crtc_info = randr.get_crtc_info(window, info.crtc, 0)
             self.monitors.append({"width": crtc_info.width, "height": crtc_info.height})
@@ -176,7 +176,7 @@ class FreedoWM(object):
 
     def update_tiling(self):
         """
-        Updated/rearranges the tiling scene
+        Updates/rearranges the tiling scene
         :return:
         """
         self.log("UPDATE TILING")
@@ -356,7 +356,7 @@ class FreedoWM(object):
             # Toggle tiling state (MOD + T)
             elif self.is_key(self.keys["TILE"]):
                 if not self.tiling_state:
-                    for i in range(self.display.screen_count() + 1):
+                    for i in range(self.monitor_count):
                         self.tiling_windows.append([])
                     if self.window_focused():
                         self.tiling_windows[self.monitor_id].append(self.event.child)
