@@ -90,8 +90,10 @@ class FreedoWM(object):
         """
         window = self.root.create_window(0, 0, 1, 1, 1, self.screen.root_depth)
         res = randr.get_screen_resources(window).outputs
-
-        for i in range(self.display.screen_count() + 1):
+        self.log(self.display.screen_count())
+        screen_count = self.display.screen_count() + 1 \
+                if self.display.screen_count() > 1 else self.display.screen_count()
+        for i in range(screen_count):
             info = randr.get_output_info(window, res[i], 0)
             crtc_info = randr.get_crtc_info(window, info.crtc, 0)
             self.monitors.append({"width": crtc_info.width, "height": crtc_info.height})
