@@ -38,6 +38,7 @@ class FreedoWM(object):
         self.program_stack = []
         self.program_stack_index = self.bar = -1
         self.current_tag = 1
+        self.previous_tag = 1
         self.monitors = []
         self.monitor_id = self.zero_coordinate = self.x_center = self.y_center = 0
         self.monitor_count = 1
@@ -337,13 +338,15 @@ class FreedoWM(object):
             elif (self.event.type == X.KeyPress or self.event.type == X.KeyRelease) and self.event.detail == 50:
                 self.shift_mask = not self.shift_mask
 
-            # Cycle between windows (MOD + Tab) // X11's "tab" keysym is 0, but it's 23
-            elif self.event.type == X.KeyPress and self.event.detail == int(self.keys["CYCLE"]) \
+            # Cycle between windows (MOD + J/K)
+            elif (self.is_key(self.keys["CYCLEUP"]) or self.is_key(self.keys["CYCLEDOWN"])) \
                     and len(self.program_stack) > 0:
                 if self.program_stack_index + 1 >= len(self.program_stack):
                     self.program_stack_index = 0
-                else:
+                elif self.is_key(self.keys["CYCLEUP"]):
                     self.program_stack_index += 1
+                else:
+                    self.program_stack_index -= 1
                 self.current_tag = self.program_stack[self.program_stack_index]["tag"]
                 self.update_tags()
                 active_window = self.program_stack[self.program_stack_index]["window"]
