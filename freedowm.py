@@ -400,6 +400,12 @@ class FreedoWM(object):
             elif self.event.type == X.KeyPress and self.event.detail == int(self.keys["TERMINAL"]):
                 os.system(self.programs["TERMINAL"] + " &")
 
+            elif self.event.type == X.KeyPress and self.event.detail == int(self.keys["TAGSWAP"]):
+                previous = self.previous_tag
+                self.previous_tag = self.current_tag
+                self.current_tag = previous
+                self.update_tags()
+
             # Open dmenu (MOD + D)
             elif self.is_key(self.keys["MENU"]):
                 self.ignore_actions = True
