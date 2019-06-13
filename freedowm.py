@@ -151,8 +151,14 @@ class FreedoWM(object):
                 15,  # height
                 0,  # border
                 X.CopyFromParent, X.RetainPermanent, X.CopyFromParent,
-                background_pixel=self.screen.black_pixel
+                background_pixel=self.screen.black_pixel,
+                event_mask=X.ExposureMask
             )
+            self.gc = self.bar.create_gc(
+                foreground=self.screen.white_pixel,
+                background=self.screen.black_pixel
+            )
+            #self.bar.fill_rectangle(gc, 0, 0, 10, 10)
             self.bar.change_attributes(override_redirect=True)
             self.bar.map()
         else:
@@ -213,6 +219,11 @@ class FreedoWM(object):
         Handles several window events
         :return:
         """
+
+        # Expose status bar text
+        if self.event.type == X.Expose:
+            self.bar.draw_text(self.gc, 10, 10, "Hello, world!")
+
 
         # Configure new window
         if self.event.type == X.CreateNotify:
