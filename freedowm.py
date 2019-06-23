@@ -31,7 +31,6 @@ class FreedoWM(object):
         self.colormap = self.screen.default_colormap
         self.currently_focused = None
         self.tiling_state = False
-        self.tiling_windows = []
         self.start = None
         self.ignore_actions = False
         self.startup = True
@@ -39,8 +38,8 @@ class FreedoWM(object):
         self.program_stack_index = -1
         self.current_tag = 1
         self.previous_tag = 1
-        self.monitors = []
-        self.monitor_id = self.zero_coordinate = self.x_center = self.y_center = 0
+        self.monitors = self.windows_on_monitor = []
+        self.current_monitor = self.zero_coordinate = self.x_center = self.y_center = 0
         self.monitor_count = 1
 
         # Set cursor
@@ -142,8 +141,8 @@ class FreedoWM(object):
     def center_window(self, window):
         try:
             window.configure(
-                width=round(self.monitors[self.monitor_id]["width"] / 2),
-                height=round(self.monitors[self.monitor_id]["height"] / 2),
+                width=round(self.monitors[self.current_monitor]["width"] / 2),
+                height=round(self.monitors[self.current_monitor]["height"] / 2),
             )
 
             window.configure(
@@ -160,20 +159,21 @@ class FreedoWM(object):
         Updates/rearranges the tiling scene
         :return:
         """
+        self.windows_on_monitor = [x for x in self.program_stack if x["monitor"] == self.current_monitor and x["tag"] == self.current_tag]
         self.log("UPDATE TILING")
-        monitor = self.monitors[self.monitor_id]
-        count = len(self.tiling_windows[self.monitor_id])
+        self.log(self.windows_on_monitor)
+        monitor = self.monitors[self.current_monitor]
+        count = len(self.windows_on_monitor)
         width = 0 if count == 0 else round(monitor["width"] / count)
-        for i, child in enumerate(self.root.query_tree().children):
-            child.configure(
+        for i, child in enumerate(self.windows_on_monitor):
+            self.log(child["window"])
+            child["window"].configure(
                 stack_mode=X.Above,
                 width=width - 2 * int(self.general["BORDER"]),
                 height=monitor["height"] - 2 * int(self.general["BORDER"]),
                 x=self.zero_coordinate + width * i,
                 y=0,
             )
-            if child not in self.tiling_windows[self.monitor_id]:
-                self.tiling_windows[self.monitor_id].append(child)
 
     def update_tags(self):
         """
@@ -200,15 +200,13 @@ class FreedoWM(object):
                 if not self.ignore_actions:
                     self.log("NEW WINDOW")
                     window = self.event.window
-                    self.program_stack.append({"window": window, "tag": self.current_tag})
+                    self.program_stack.append({"window": window, "tag": self.current_tag, "monitor": self.current_monitor})
                     self.program_stack_index = len(self.program_stack) - 1
                     if self.tiling_state:
-                        self.tiling_windows[self.monitor_id].append(window)
                         self.update_tiling()
-                        monitor_width = self.monitors[self.monitor_id]["width"]
+                        monitor_width = self.monitors[self.current_monitor]["width"]
                         self.root.warp_pointer(
-                            round(self.zero_coordinate + monitor_width -
-                                  (monitor_width / len(self.tiling_windows[self.monitor_id]) + 1) / 2),
+                            round(self.zero_coordinate + monitor_width - (monitor_width / len(self.windows_on_monitor) + 1) / 2),
                             self.y_center
                         )
                     else:
@@ -220,13 +218,10 @@ class FreedoWM(object):
         # Remove closed window from stack
         if self.event.type == X.DestroyNotify:
             try:
-                if not self.ignore_actions \
-                        and {"window": self.event.window, "tag": self.current_tag} in self.program_stack:
+                if not self.ignore_actions and {"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor} \
+                        in self.program_stack:
                     self.log("CLOSE WINDOW")
-                    if {"window": self.event.window, "tag": self.current_tag} in self.program_stack:
-                        self.program_stack.remove({"window": self.event.window, "tag": self.current_tag})
                     if self.tiling_state:
-                        self.tiling_windows[self.monitor_id].remove(self.event.window)
                         self.update_tiling()
                     elif len(self.program_stack) > 0:
                         focused_window = self.program_stack[0]["window"]
@@ -235,6 +230,8 @@ class FreedoWM(object):
                             round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
                             round(focused_window.get_geometry().y + focused_window.get_geometry().height / 2)
                         )
+                    if {"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
+                        self.program_stack.remove({"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor})
                 elif self.ignore_actions:
                     self.ignore_actions = False
             except (error.BadWindow, error.BadDrawable):
@@ -242,9 +239,8 @@ class FreedoWM(object):
 
         # Set focused window "in focus"
         if self.window_focused() and not self.ignore_actions:
-            if hasattr(self.event, "child") and self.event.child != X.NONE \
-                    and self.event.child != self.currently_focused \
-                    and {"window": self.event.child, "tag": self.current_tag} in self.program_stack:
+            if hasattr(self.event, "child") and self.event.child != X.NONE and self.event.child != self.currently_focused \
+                    and {"window": self.event.child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
@@ -253,10 +249,10 @@ class FreedoWM(object):
                 self.set_border(self.currently_focused, self.colors["ACTIVE_BORDER"])
                 self.currently_focused.configure(stack_mode=X.Above)
                 self.program_stack_index = self.program_stack.index(
-                    {"window": self.currently_focused, "tag": self.current_tag}
+                    {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
                 )
             elif self.root.query_pointer().child not in (self.currently_focused, X.NONE) \
-                    and {"window": self.root.query_pointer().child, "tag": self.current_tag} in self.program_stack:
+                    and {"window": self.root.query_pointer().child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
@@ -265,25 +261,25 @@ class FreedoWM(object):
                 self.set_border(self.currently_focused, self.colors["ACTIVE_BORDER"])
                 self.currently_focused.configure(stack_mode=X.Above)
                 self.program_stack_index = self.program_stack.index(
-                    {"window": self.currently_focused, "tag": self.current_tag}
+                    {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
                 )
             self.display.set_input_focus(self.currently_focused, X.RevertToPointerRoot, 0)
 
         # Update current monitor
         if self.event.type == X.NotifyPointerRoot or self.startup:
             self.startup = False
-            previous = self.monitor_id
+            previous = self.current_monitor
             if self.root.query_pointer().root_x > self.monitors[0]["width"]:
-                self.monitor_id = 1
+                self.current_monitor = 1
                 self.zero_coordinate = self.monitors[0]["width"]
                 self.x_center = round(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
                 self.y_center = round(self.monitors[1]["height"] / 2)
             else:
-                self.monitor_id = 0
+                self.current_monitor = 0
                 self.x_center = round(self.monitors[0]["width"] / 2)
                 self.y_center = round(self.monitors[0]["height"] / 2)
-            if previous != self.monitor_id:
-                self.log("UPDATE MONITOR ID: " + str(self.monitor_id))
+            if previous != self.current_monitor:
+                self.log("UPDATE MONITOR ID: " + str(self.current_monitor))
 
     def main_loop(self):
         """
@@ -296,13 +292,13 @@ class FreedoWM(object):
 
             # Move window (MOD + left click)
             if self.event.type == X.ButtonPress and self.event.child != X.NONE \
-                    and {"window": self.event.child, "tag": self.current_tag} in self.program_stack:
+                    and {"window": self.event.child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 attribute = self.event.child.get_geometry()
                 self.start = self.event
 
             # Resize window (MOD + right click)
             elif self.event.type == X.MotionNotify and self.start \
-                    and {"window": self.event.child, "tag": self.current_tag} in self.program_stack:
+                    and {"window": self.event.child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 x_diff = self.event.root_x - self.start.root_x
                 y_diff = self.event.root_y - self.start.root_y
                 self.start.child.configure(
@@ -317,8 +313,7 @@ class FreedoWM(object):
                 self.shift_mask = not self.shift_mask
 
             # Cycle between windows (MOD + J/K)
-            elif (self.is_key(self.keys["CYCLEUP"]) or self.is_key(self.keys["CYCLEDOWN"])) \
-                    and len(self.program_stack) > 0:
+            elif (self.is_key(self.keys["CYCLEUP"]) or self.is_key(self.keys["CYCLEDOWN"])) and len(self.program_stack) > 0:
                 if self.program_stack_index + 1 >= len(self.program_stack):
                     self.program_stack_index = 0
                 elif self.is_key(self.keys["CYCLEUP"]):
@@ -326,6 +321,7 @@ class FreedoWM(object):
                 else:
                     self.program_stack_index -= 1
                 self.current_tag = self.program_stack[self.program_stack_index]["tag"]
+                self.current_monitor = self.program_stack[self.program_stack_index]["monitor"]
                 self.update_tags()
                 active_window = self.program_stack[self.program_stack_index]["window"]
                 active_window.configure(stack_mode=X.Above)
@@ -337,21 +333,17 @@ class FreedoWM(object):
             # Toggle tiling state (MOD + T)
             elif self.is_key(self.keys["TILE"]):
                 if not self.tiling_state:
-                    for i in range(self.monitor_count):
-                        self.tiling_windows.append([])
                     if self.window_focused():
-                        self.tiling_windows[self.monitor_id].append(self.event.child)
                         self.update_tiling()
                         self.tiling_state = True
                 else:
-                    self.tiling_windows = []
                     self.tiling_state = False
 
             # Toggle maximization (MOD + M)
             elif self.is_key(self.keys["MAX"]):
                 if self.window_focused():
-                    full_width = self.monitors[self.monitor_id]["width"] - 2 * int(self.general["BORDER"])
-                    full_height = self.monitors[self.monitor_id]["height"] - 2 * int(self.general["BORDER"])
+                    full_width = self.monitors[self.current_monitor]["width"] - 2 * int(self.general["BORDER"])
+                    full_height = self.monitors[self.current_monitor]["height"] - 2 * int(self.general["BORDER"])
 
                     if self.event.child.get_geometry().width == full_width \
                             and self.event.child.get_geometry().height == full_height \
