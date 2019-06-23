@@ -33,10 +33,10 @@ class FreedoWM(object):
         self.tiling_state = False
         self.tiling_windows = []
         self.start = None
-        self.ignore_actions = self.new_bar = False
+        self.ignore_actions = False
         self.startup = True
         self.program_stack = []
-        self.program_stack_index = self.bar = -1
+        self.program_stack_index = -1
         self.current_tag = 1
         self.previous_tag = 1
         self.monitors = []
@@ -49,6 +49,7 @@ class FreedoWM(object):
                                           (65535, 65535, 65535), (0, 0, 0))
         self.root.change_attributes(cursor=cursor)
 
+        self.screen.override_redirect = True
         self.get_monitors()
         self.set_listeners()
         self.root.warp_pointer(0, 0)
@@ -61,10 +62,12 @@ class FreedoWM(object):
 
         # Listen for window changes
         self.root.change_attributes(
+            override_redirect=True,
             event_mask=X.PropertyChangeMask |
                        X.FocusChangeMask |
                        X.StructureNotifyMask |
                        X.SubstructureNotifyMask |
+                       X.SubstructureRedirectMask |
                        X.PointerMotionMask
         )
 
@@ -92,8 +95,7 @@ class FreedoWM(object):
         """
         window = self.root.create_window(0, 0, 1, 1, 1, self.screen.root_depth)
         res = randr.get_screen_resources(window).outputs
-        self.monitor_count = self.display.screen_count() + 1 \
-                if self.display.screen_count() > 1 else self.display.screen_count()
+        self.monitor_count = len(res)
         for i in range(self.monitor_count):
             info = randr.get_output_info(window, res[i], 0)
             crtc_info = randr.get_crtc_info(window, info.crtc, 0)
@@ -136,34 +138,6 @@ class FreedoWM(object):
             border_color = self.colormap.alloc_named_color(color).pixel
             child.configure(border_width=int(self.general["BORDER"]))
             child.change_attributes(None, border_pixel=border_color)
-
-    def toggle_bar(self):
-        """
-        Toggles the status bar on the current monitor
-        :return:
-        """
-        if self.bar == -1:
-            self.new_bar = True
-            self.bar = self.root.create_window(
-                self.zero_coordinate,  # x
-                0,  # y
-                self.monitors[self.monitor_id]["width"],  # width
-                15,  # height
-                0,  # border
-                X.CopyFromParent, X.RetainPermanent, X.CopyFromParent,
-                background_pixel=self.screen.black_pixel,
-                event_mask=X.ExposureMask
-            )
-            self.gc = self.bar.create_gc(
-                foreground=self.screen.white_pixel,
-                background=self.screen.black_pixel
-            )
-            #self.bar.fill_rectangle(gc, 0, 0, 10, 10)
-            self.bar.change_attributes(override_redirect=True)
-            self.bar.map()
-        else:
-            self.bar.destroy()
-            self.bar = -1
 
     def center_window(self, window):
         try:
@@ -220,15 +194,10 @@ class FreedoWM(object):
         :return:
         """
 
-        # Expose status bar text
-        if self.event.type == X.Expose:
-            self.bar.draw_text(self.gc, 10, 10, "Hello, world!")
-
-
         # Configure new window
-        if self.event.type == X.CreateNotify:
+        if self.event.type == X.MapRequest:
             try:
-                if not self.ignore_actions and not self.new_bar:
+                if not self.ignore_actions:
                     self.log("NEW WINDOW")
                     window = self.event.window
                     self.program_stack.append({"window": window, "tag": self.current_tag})
@@ -244,8 +213,7 @@ class FreedoWM(object):
                         )
                     else:
                         self.center_window(window)
-                elif self.new_bar:
-                    self.new_bar = False
+                    window.map()
             except (error.BadWindow, error.BadDrawable):
                 self.log("BAD WINDOW OR DRAWABLE!")
 
@@ -299,6 +267,7 @@ class FreedoWM(object):
                 self.program_stack_index = self.program_stack.index(
                     {"window": self.currently_focused, "tag": self.current_tag}
                 )
+            self.display.set_input_focus(self.currently_focused, X.RevertToPointerRoot, 0)
 
         # Update current monitor
         if self.event.type == X.NotifyPointerRoot or self.startup:
@@ -315,8 +284,6 @@ class FreedoWM(object):
                 self.y_center = round(self.monitors[0]["height"] / 2)
             if previous != self.monitor_id:
                 self.log("UPDATE MONITOR ID: " + str(self.monitor_id))
-
-        self.display.sync()
 
     def main_loop(self):
         """
@@ -421,10 +388,6 @@ class FreedoWM(object):
             elif self.is_key(self.keys["MENU"]):
                 self.ignore_actions = True
                 os.system(self.programs["MENU"] + " &")
-
-            # Toggle status bar (MOD + B)
-            elif self.is_key(self.keys["BAR"]):
-                self.toggle_bar()
 
             # Exit window manager (MOD + P)
             elif self.is_key(self.keys["QUIT"]):
