@@ -138,6 +138,12 @@ class FreedoWM(object):
             child.configure(border_width=int(self.general["BORDER"]))
             child.change_attributes(None, border_pixel=border_color)
 
+    def focus_window(self, window):
+        self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
+        self.currently_focused = window
+        self.set_border(self.currently_focused, self.colors["ACTIVE_BORDER"])
+        self.currently_focused.configure(stack_mode=X.Above)
+
     def center_window(self, window):
         try:
             window.configure(
@@ -150,6 +156,7 @@ class FreedoWM(object):
                 y=self.y_center - round(window.get_geometry().height / 2),
             )
             window.configure(stack_mode=X.Above)
+            window.map()
             self.root.warp_pointer(self.x_center, self.y_center)
         except Exception:
             self.log("GPU OVERFLOW!?")
@@ -211,6 +218,7 @@ class FreedoWM(object):
                         )
                     else:
                         self.center_window(window)
+                    self.focus_window(window)
                     window.map()
             except (error.BadWindow, error.BadDrawable):
                 self.log("BAD WINDOW OR DRAWABLE!")
@@ -221,17 +229,17 @@ class FreedoWM(object):
                 if not self.ignore_actions and {"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor} \
                         in self.program_stack:
                     self.log("CLOSE WINDOW")
+                    if {"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
+                        self.program_stack.remove({"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor})
                     if self.tiling_state:
                         self.update_tiling()
                     elif len(self.program_stack) > 0:
                         focused_window = self.program_stack[0]["window"]
-                        focused_window.configure(stack_mode=X.Above)
+                        self.focus_window(focused_window)
                         self.root.warp_pointer(
                             round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
                             round(focused_window.get_geometry().y + focused_window.get_geometry().height / 2)
                         )
-                    if {"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
-                        self.program_stack.remove({"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor})
                 elif self.ignore_actions:
                     self.ignore_actions = False
             except (error.BadWindow, error.BadDrawable):
@@ -245,9 +253,7 @@ class FreedoWM(object):
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
                 self.log("FOCUS BORDER")
-                self.currently_focused = self.event.child
-                self.set_border(self.currently_focused, self.colors["ACTIVE_BORDER"])
-                self.currently_focused.configure(stack_mode=X.Above)
+                self.focus_window(self.event.child)
                 self.program_stack_index = self.program_stack.index(
                     {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
                 )
@@ -257,9 +263,7 @@ class FreedoWM(object):
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
                 self.log("FOCUS BORDER")
-                self.currently_focused = self.root.query_pointer().child
-                self.set_border(self.currently_focused, self.colors["ACTIVE_BORDER"])
-                self.currently_focused.configure(stack_mode=X.Above)
+                self.focus_window(self.root.query_pointer().child)
                 self.program_stack_index = self.program_stack.index(
                     {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
                 )
