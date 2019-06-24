@@ -41,13 +41,8 @@ class FreedoWM(object):
         self.current_monitor = self.zero_coordinate = self.x_center = self.y_center = 0
         self.monitor_count = 1
 
-        # Set cursor
-        font = self.display.open_font('cursor')
-        cursor = font.create_glyph_cursor(font, int(self.general["CURSOR"]), int(self.general["CURSOR"]) + 1,
-                                          (65535, 65535, 65535), (0, 0, 0))
-        self.root.change_attributes(cursor=cursor)
-
         self.screen.override_redirect = True
+        self.set_cursor()
         self.get_monitors()
         self.set_listeners()
         self.root.warp_pointer(0, 0)
@@ -85,6 +80,18 @@ class FreedoWM(object):
         """
         if self.general["DEBUG"] != "0":
             print(message)
+
+    def set_cursor(self):
+        """
+        Sets the cursor according to the config
+        :return:
+        """
+        if int(self.general["CURSOR"]) != -1:
+            font = self.display.open_font('cursor')
+            cursor = font.create_glyph_cursor(font, int(self.general["CURSOR"]), int(self.general["CURSOR"]) + 1, (65535, 65535, 65535), (0, 0, 0))
+            self.root.change_attributes(cursor=cursor)
+        else:
+            os.system("xsetroot -cursor_name left_ptr")
 
     def get_monitors(self):
         """
@@ -359,6 +366,7 @@ class FreedoWM(object):
             elif self.event.type == X.KeyPress and self.event.detail == int(self.keys["TERMINAL"]):
                 os.system(self.programs["TERMINAL"] + " &")
 
+            # Switch to last used tag/desktop (MOD + Tab) // X11's "tab" keysym is 0, but it's 23
             elif self.event.type == X.KeyPress and self.event.detail == int(self.keys["TAGSWAP"]):
                 previous = self.previous_tag
                 self.previous_tag = self.current_tag
