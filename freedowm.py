@@ -235,8 +235,7 @@ class FreedoWM(object):
 
         # Set focused window "in focus"
         if self.window_focused() and not self.ignore_actions:
-            if hasattr(self.event, "child") and self.event.child != X.NONE and self.event.child != self.currently_focused \
-                    and {"window": self.event.child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
+            if hasattr(self.event, "child") and self.event.child != X.NONE and self.event.child != self.currently_focused:
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
@@ -245,8 +244,7 @@ class FreedoWM(object):
                 self.program_stack_index = self.program_stack.index(
                     {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
                 )
-            elif self.root.query_pointer().child not in (self.currently_focused, X.NONE) \
-                    and {"window": self.root.query_pointer().child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
+            elif self.root.query_pointer().child not in (self.currently_focused, X.NONE):
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
@@ -283,14 +281,12 @@ class FreedoWM(object):
             self.update_windows()
 
             # Move window (MOD + left click)
-            if self.event.type == X.ButtonPress and self.event.child != X.NONE \
-                    and {"window": self.event.child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
+            if self.event.type == X.ButtonPress and self.event.child != X.NONE:
                 attribute = self.event.child.get_geometry()
                 self.start = self.event
 
             # Resize window (MOD + right click)
-            elif self.event.type == X.MotionNotify and self.start \
-                    and {"window": self.event.child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
+            elif self.event.type == X.MotionNotify and self.start:
                 x_diff = self.event.root_x - self.start.root_x
                 y_diff = self.event.root_y - self.start.root_y
                 self.start.child.configure(
