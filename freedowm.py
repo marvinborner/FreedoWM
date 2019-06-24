@@ -5,7 +5,6 @@ import os
 import sys
 
 from Xlib import X, XK
-from Xlib import error
 from Xlib.display import Display
 from Xlib.ext import randr
 
@@ -145,21 +144,18 @@ class FreedoWM(object):
         self.currently_focused.configure(stack_mode=X.Above)
 
     def center_window(self, window):
-        try:
-            window.configure(
-                width=round(self.monitors[self.current_monitor]["width"] / 2),
-                height=round(self.monitors[self.current_monitor]["height"] / 2),
-            )
+        window.configure(
+            width=round(self.monitors[self.current_monitor]["width"] / 2),
+            height=round(self.monitors[self.current_monitor]["height"] / 2),
+        )
 
-            window.configure(
-                x=self.x_center - round(window.get_geometry().width / 2),
-                y=self.y_center - round(window.get_geometry().height / 2),
-            )
-            window.configure(stack_mode=X.Above)
-            window.map()
-            self.root.warp_pointer(self.x_center, self.y_center)
-        except Exception:
-            self.log("GPU OVERFLOW!?")
+        window.configure(
+            x=self.x_center - round(window.get_geometry().width / 2),
+            y=self.y_center - round(window.get_geometry().height / 2),
+        )
+        window.configure(stack_mode=X.Above)
+        window.map()
+        self.root.warp_pointer(self.x_center, self.y_center)
 
     def update_tiling(self):
         """
@@ -168,12 +164,10 @@ class FreedoWM(object):
         """
         self.windows_on_monitor = [x for x in self.program_stack if x["monitor"] == self.current_monitor and x["tag"] == self.current_tag]
         self.log("UPDATE TILING")
-        self.log(self.windows_on_monitor)
         monitor = self.monitors[self.current_monitor]
         count = len(self.windows_on_monitor)
         width = 0 if count == 0 else round(monitor["width"] / count)
         for i, child in enumerate(self.windows_on_monitor):
-            self.log(child["window"])
             child["window"].configure(
                 stack_mode=X.Above,
                 width=width - 2 * int(self.general["BORDER"]),
@@ -203,47 +197,41 @@ class FreedoWM(object):
 
         # Configure new window
         if self.event.type == X.MapRequest:
-            try:
-                if not self.ignore_actions:
-                    self.log("NEW WINDOW")
-                    window = self.event.window
-                    self.program_stack.append({"window": window, "tag": self.current_tag, "monitor": self.current_monitor})
-                    self.program_stack_index = len(self.program_stack) - 1
-                    if self.tiling_state:
-                        self.update_tiling()
-                        monitor_width = self.monitors[self.current_monitor]["width"]
-                        self.root.warp_pointer(
-                            round(self.zero_coordinate + monitor_width - (monitor_width / len(self.windows_on_monitor) + 1) / 2),
-                            self.y_center
-                        )
-                    else:
-                        self.center_window(window)
-                    self.focus_window(window)
-                    window.map()
-            except (error.BadWindow, error.BadDrawable):
-                self.log("BAD WINDOW OR DRAWABLE!")
+            if not self.ignore_actions:
+                self.log("NEW WINDOW")
+                window = self.event.window
+                self.program_stack.append({"window": window, "tag": self.current_tag, "monitor": self.current_monitor})
+                self.program_stack_index = len(self.program_stack) - 1
+                if self.tiling_state:
+                    self.update_tiling()
+                    monitor_width = self.monitors[self.current_monitor]["width"]
+                    self.root.warp_pointer(
+                        round(self.zero_coordinate + monitor_width - (monitor_width / len(self.windows_on_monitor) + 1) / 2),
+                        self.y_center
+                    )
+                else:
+                    self.center_window(window)
+                self.focus_window(window)
+                window.map()
 
         # Remove closed window from stack
         if self.event.type == X.DestroyNotify:
-            try:
-                if not self.ignore_actions and {"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor} \
-                        in self.program_stack:
-                    self.log("CLOSE WINDOW")
-                    if {"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
-                        self.program_stack.remove({"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor})
-                    if self.tiling_state:
-                        self.update_tiling()
-                    elif len(self.program_stack) > 0:
-                        focused_window = self.program_stack[-1]["window"]
-                        self.focus_window(focused_window)
-                        self.root.warp_pointer(
-                            round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
-                            round(focused_window.get_geometry().y + focused_window.get_geometry().height / 2)
-                        )
-                elif self.ignore_actions:
-                    self.ignore_actions = False
-            except (error.BadWindow, error.BadDrawable):
-                self.log("BAD WINDOW OR DRAWABLE!")
+            if not self.ignore_actions and {"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor} \
+                    in self.program_stack:
+                self.log("CLOSE WINDOW")
+                if {"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
+                    self.program_stack.remove({"window": self.event.window, "tag": self.current_tag, "monitor": self.current_monitor})
+                if self.tiling_state:
+                    self.update_tiling()
+                elif len(self.program_stack) > 0:
+                    focused_window = self.program_stack[-1]["window"]
+                    self.focus_window(focused_window)
+                    self.root.warp_pointer(
+                        round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
+                        round(focused_window.get_geometry().y + focused_window.get_geometry().height / 2)
+                    )
+            elif self.ignore_actions:
+                self.ignore_actions = False
 
         # Set focused window "in focus"
         if self.window_focused() and not self.ignore_actions:
@@ -367,7 +355,7 @@ class FreedoWM(object):
                 self.center_window(self.event.child)
 
             # Close window (MOD + Q)
-            elif self.is_key(self.keys["CLOSE"]) and self.window_focused():
+            elif self.is_key(self.keys["CLOSE"]) and self.window_focused() and self.event.child != X.NONE:
                 self.event.child.destroy_sub_windows()
                 self.event.child.destroy()
 
@@ -411,4 +399,10 @@ class FreedoWM(object):
 
 
 FreedoWM = FreedoWM()
-FreedoWM.main_loop()
+if FreedoWM.general["DEBUG"] == "1":
+    FreedoWM.main_loop()
+else:
+    try:
+        FreedoWM.main_loop()
+    except Exception:
+        pass
