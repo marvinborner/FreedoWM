@@ -242,7 +242,9 @@ class FreedoWM(object):
 
         # Set focused window "in focus"
         if self.window_focused() and not self.ignore_actions:
-            if hasattr(self.event, "child") and self.event.child != X.NONE and self.event.child != self.currently_focused:
+            # self.log(self.root.query_pointer().__dict__)  # TODO: Fix hover-focusing of GTK/QT applications
+            if hasattr(self.event, "child") and self.event.child != X.NONE and self.event.child != self.currently_focused \
+                    and {"window": self.event.child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
@@ -251,7 +253,8 @@ class FreedoWM(object):
                 self.program_stack_index = self.program_stack.index(
                     {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
                 )
-            elif self.root.query_pointer().child not in (self.currently_focused, X.NONE):
+            elif self.root.query_pointer().child not in (self.currently_focused, X.NONE) \
+                    and {"window": self.root.query_pointer().child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
@@ -288,6 +291,7 @@ class FreedoWM(object):
             self.update_windows()
 
             # Move window (MOD + left click)
+            # TODO: Update monitor index after move to different monitor
             if self.event.type == X.ButtonPress and self.event.child != X.NONE:
                 attribute = self.event.child.get_geometry()
                 self.start = self.event
