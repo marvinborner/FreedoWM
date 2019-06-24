@@ -364,6 +364,7 @@ class FreedoWM(object):
 
             # Close window (MOD + Q)
             elif self.is_key(self.keys["CLOSE"]) and self.window_focused():
+                self.event.child.destroy_sub_windows()
                 self.event.child.destroy()
 
             # Open terminal (MOD + Enter) // X11's "enter" keysym is 0, but it's 36
