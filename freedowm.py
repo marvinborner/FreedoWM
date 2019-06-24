@@ -234,7 +234,7 @@ class FreedoWM(object):
                     if self.tiling_state:
                         self.update_tiling()
                     elif len(self.program_stack) > 0:
-                        focused_window = self.program_stack[0]["window"]
+                        focused_window = self.program_stack[-1]["window"]
                         self.focus_window(focused_window)
                         self.root.warp_pointer(
                             round(focused_window.get_geometry().x + focused_window.get_geometry().width / 2),
@@ -318,11 +318,11 @@ class FreedoWM(object):
 
             # Cycle between windows (MOD + J/K)
             elif (self.is_key(self.keys["CYCLEUP"]) or self.is_key(self.keys["CYCLEDOWN"])) and len(self.program_stack) > 0:
-                if self.program_stack_index + 1 >= len(self.program_stack):
+                if self.program_stack_index + 1 >= len(self.program_stack) and self.is_key(self.keys["CYCLEUP"]):
                     self.program_stack_index = 0
                 elif self.is_key(self.keys["CYCLEUP"]):
                     self.program_stack_index += 1
-                else:
+                elif self.is_key(self.keys["CYCLEDOWN"]):
                     self.program_stack_index -= 1
                 self.current_tag = self.program_stack[self.program_stack_index]["tag"]
                 self.current_monitor = self.program_stack[self.program_stack_index]["monitor"]
