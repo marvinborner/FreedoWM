@@ -57,7 +57,8 @@ class FreedoWM(object):
         self.root.change_attributes(
             override_redirect=True,
             event_mask=X.PropertyChangeMask |
-                       X.FocusChangeMask |
+                       # X.FocusChangeMask |
+                       X.EnterWindowMask |
                        X.StructureNotifyMask |
                        X.SubstructureNotifyMask |
                        X.SubstructureRedirectMask |
@@ -150,6 +151,7 @@ class FreedoWM(object):
         self.currently_focused = window
         self.set_border(self.currently_focused, self.colors["ACTIVE_BORDER"])
         self.currently_focused.configure(stack_mode=X.Above)
+        self.display.set_input_focus(self.currently_focused, X.RevertToPointerRoot, 0)
 
     def center_window(self, window):
         window.configure(
@@ -220,6 +222,7 @@ class FreedoWM(object):
                 else:
                     self.center_window(window)
                 self.focus_window(window)
+                window.map_sub_windows()
                 window.map()
 
         # Remove closed window from stack
@@ -242,27 +245,25 @@ class FreedoWM(object):
                 self.ignore_actions = False
 
         # Set focused window "in focus"
-        if self.window_focused() and not self.ignore_actions:
+        if (self.window_focused() or self.event.type == X.EnterNotify) and not self.ignore_actions:
             # self.log(self.root.query_pointer().__dict__)  # TODO: Fix hover-focusing of GTK/QT applications
-            if hasattr(self.event, "child") and self.event.child not in (self.currently_focused, X.NONE) \
-                    and {"window": self.event.child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
+            if hasattr(self.event, "child"):
+                window = self.event.child
+            elif hasattr(self.event, "window"):
+                window = self.event.window
+            else:
+                window = self.root.query_pointer().window
+            if window != X.NONE and window.id != self.currently_focused.id \
+                    and {"window": window, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
                 self.log("FOCUS BORDER")
-                self.focus_window(self.event.child)
-            elif self.root.query_pointer().child not in (self.currently_focused, X.NONE) \
-                    and {"window": self.root.query_pointer().child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
-                if self.currently_focused is not None:
-                    self.log("RESET BORDER")
-                    self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
-                self.log("FOCUS BORDER")
-                self.focus_window(self.root.query_pointer().child)
+                self.focus_window(window)
             if {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 self.program_stack_index = self.program_stack.index(
                     {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
                 )
-            self.display.set_input_focus(self.currently_focused, X.RevertToPointerRoot, 0)
 
         # Update current monitor
         if self.event.type == X.NotifyPointerRoot or self.startup:
@@ -277,7 +278,7 @@ class FreedoWM(object):
                 self.current_monitor = self.zero_coordinate = 0
                 self.x_center = round(self.monitors[0]["width"] / 2)
                 self.y_center = round(self.monitors[0]["height"] / 2)
-            if self.window_focused() and not self.ignore_actions:
+            if self.window_focused() and not self.ignore_actions and self.program_stack_index < len(self.program_stack):
                 self.program_stack[self.program_stack_index]["monitor"] = self.current_monitor
             if previous != self.current_monitor:
                 self.log("UPDATE MONITOR ID: " + str(self.current_monitor))
