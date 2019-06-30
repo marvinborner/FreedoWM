@@ -243,16 +243,13 @@ class FreedoWM(object):
         # Set focused window "in focus"
         if self.window_focused() and not self.ignore_actions:
             # self.log(self.root.query_pointer().__dict__)  # TODO: Fix hover-focusing of GTK/QT applications
-            if hasattr(self.event, "child") and self.event.child != X.NONE and self.event.child != self.currently_focused \
+            if hasattr(self.event, "child") and self.event.child not in (self.currently_focused, X.NONE) \
                     and {"window": self.event.child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 if self.currently_focused is not None:
                     self.log("RESET BORDER")
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
                 self.log("FOCUS BORDER")
                 self.focus_window(self.event.child)
-                self.program_stack_index = self.program_stack.index(
-                    {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
-                )
             elif self.root.query_pointer().child not in (self.currently_focused, X.NONE) \
                     and {"window": self.root.query_pointer().child, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 if self.currently_focused is not None:
@@ -260,9 +257,9 @@ class FreedoWM(object):
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
                 self.log("FOCUS BORDER")
                 self.focus_window(self.root.query_pointer().child)
-                self.program_stack_index = self.program_stack.index(
-                    {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
-                )
+            self.program_stack_index = self.program_stack.index(
+                {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
+            )
             self.display.set_input_focus(self.currently_focused, X.RevertToPointerRoot, 0)
 
         # Update current monitor
@@ -278,6 +275,9 @@ class FreedoWM(object):
                 self.current_monitor = 0
                 self.x_center = round(self.monitors[0]["width"] / 2)
                 self.y_center = round(self.monitors[0]["height"] / 2)
+            if self.window_focused() and not self.ignore_actions:
+                print(self.program_stack[self.program_stack_index])
+                self.program_stack[self.program_stack_index]["monitor"] = self.current_monitor
             if previous != self.current_monitor:
                 self.log("UPDATE MONITOR ID: " + str(self.current_monitor))
 
@@ -291,7 +291,6 @@ class FreedoWM(object):
             self.update_windows()
 
             # Move window (MOD + left click)
-            # TODO: Update monitor index after move to different monitor
             if self.event.type == X.ButtonPress and self.event.child != X.NONE:
                 attribute = self.event.child.get_geometry()
                 self.start = self.event
