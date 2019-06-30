@@ -58,7 +58,7 @@ class FreedoWM(object):
             override_redirect=True,
             event_mask=X.PropertyChangeMask |
                        # X.FocusChangeMask |
-                       X.EnterWindowMask |
+                       # X.EnterWindowMask |
                        X.StructureNotifyMask |
                        X.SubstructureNotifyMask |
                        X.SubstructureRedirectMask |
@@ -245,14 +245,15 @@ class FreedoWM(object):
                 self.ignore_actions = False
 
         # Set focused window "in focus"
-        if (self.window_focused() or self.event.type == X.EnterNotify) and not self.ignore_actions:
+        if self.window_focused() and not self.ignore_actions:
             # self.log(self.root.query_pointer().__dict__)  # TODO: Fix hover-focusing of GTK/QT applications
             if hasattr(self.event, "child"):
                 window = self.event.child
-            elif hasattr(self.event, "window"):
-                window = self.event.window
-            else:
+            elif hasattr(self.root.query_pointer(), "window"):
                 window = self.root.query_pointer().window
+            else:
+                window = X.NONE
+
             if window != X.NONE and window.id != self.currently_focused.id \
                     and {"window": window, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
                 if self.currently_focused is not None:
