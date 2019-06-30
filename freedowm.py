@@ -257,9 +257,10 @@ class FreedoWM(object):
                     self.set_border(self.currently_focused, self.colors["INACTIVE_BORDER"])
                 self.log("FOCUS BORDER")
                 self.focus_window(self.root.query_pointer().child)
-            self.program_stack_index = self.program_stack.index(
-                {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
-            )
+            if {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor} in self.program_stack:
+                self.program_stack_index = self.program_stack.index(
+                    {"window": self.currently_focused, "tag": self.current_tag, "monitor": self.current_monitor}
+                )
             self.display.set_input_focus(self.currently_focused, X.RevertToPointerRoot, 0)
 
         # Update current monitor
@@ -272,11 +273,10 @@ class FreedoWM(object):
                 self.x_center = round(self.monitors[1]["width"] / 2 + self.monitors[0]["width"])
                 self.y_center = round(self.monitors[1]["height"] / 2)
             else:
-                self.current_monitor = 0
+                self.current_monitor = self.zero_coordinate = 0
                 self.x_center = round(self.monitors[0]["width"] / 2)
                 self.y_center = round(self.monitors[0]["height"] / 2)
             if self.window_focused() and not self.ignore_actions:
-                print(self.program_stack[self.program_stack_index])
                 self.program_stack[self.program_stack_index]["monitor"] = self.current_monitor
             if previous != self.current_monitor:
                 self.log("UPDATE MONITOR ID: " + str(self.current_monitor))
