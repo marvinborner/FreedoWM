@@ -371,9 +371,7 @@ class FreedoWM(object):
 
             # Switch to last used tag/desktop (MOD + Tab) // X11's "tab" keysym is 0, but it's 23
             elif self.event.type == X.KeyPress and self.event.detail == int(self.keys["TAGSWAP"]):
-                previous = self.previous_tag
-                self.previous_tag = self.current_tag
-                self.current_tag = previous
+                self.previous_tag, self.current_tag = self.current_tag, self.previous_tag
                 self.update_tags()
 
             # Open dmenu (MOD + D)
@@ -392,8 +390,9 @@ class FreedoWM(object):
                      self.to_key(self.keys["TAG3"]), self.to_key(self.keys["TAG4"]), self.to_key(self.keys["TAG5"]),
                      self.to_key(self.keys["TAG6"]), self.to_key(self.keys["TAG7"]), self.to_key(self.keys["TAG8"])]:
                 new_tag = int(XK.keysym_to_string(self.display.keycode_to_keysym(self.event.detail, 0)))
-                if not self.shift_mask:
-                    self.log("SHIFT TAG TO " + str(self.current_tag))
+                if not self.shift_mask and self.current_tag != new_tag:
+                    self.log("SHIFT TAG TO " + str(new_tag))
+                    self.previous_tag = self.current_tag
                     self.current_tag = new_tag
                     self.update_tags()
                 elif self.window_focused():
