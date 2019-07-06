@@ -153,6 +153,23 @@ class FreedoWM(object):
         self.currently_focused.configure(stack_mode=X.Above)
         self.display.set_input_focus(self.currently_focused, X.RevertToPointerRoot, 0)
 
+    def toggle_fullscreen(self, window):
+        full_width = self.monitors[self.current_monitor]["width"] - 2 * int(self.general["BORDER"])
+        full_height = self.monitors[self.current_monitor]["height"] - 2 * int(self.general["BORDER"])
+
+        if window.get_geometry().width == full_width \
+                and window.get_geometry().height == full_height \
+                and window.get_geometry().x == self.zero_coordinate \
+                and window.get_geometry().y == 0:
+            self.center_window(self.event.child)
+        else:
+            window.configure(
+                width=full_width,
+                height=full_height,
+                x=self.zero_coordinate,
+                y=0
+            )
+
     def center_window(self, window):
         window.configure(
             width=round(self.monitors[self.current_monitor]["width"] / 2),
@@ -293,13 +310,17 @@ class FreedoWM(object):
             self.event = self.display.next_event()
             self.update_windows()
 
-            # Move window (MOD + left click)
-            if self.event.type == X.ButtonPress and self.event.child != X.NONE:
+            # Update pointer position (POINTER)
+            if self.event.type == X.ButtonPress and self.event.detail != 2 and self.event.child != X.NONE:
                 attribute = self.event.child.get_geometry()
                 self.start = self.event
 
+            # Update pointer position (POINTER)
+            if self.event.type == X.ButtonRelease and self.event.detail == 2 and self.window_focused():
+                self.toggle_fullscreen(self.event.child)
+
             # Resize window (MOD + right click)
-            elif self.event.type == X.MotionNotify and self.start:
+            elif self.event.type == X.MotionNotify and self.event.detail != 2 and self.start:
                 x_diff = self.event.root_x - self.start.root_x
                 y_diff = self.event.root_y - self.start.root_y
                 self.start.child.configure(
@@ -341,23 +362,8 @@ class FreedoWM(object):
                     self.tiling_state = False
 
             # Toggle maximization (MOD + M)
-            elif self.is_key(self.keys["MAX"]):
-                if self.window_focused():
-                    full_width = self.monitors[self.current_monitor]["width"] - 2 * int(self.general["BORDER"])
-                    full_height = self.monitors[self.current_monitor]["height"] - 2 * int(self.general["BORDER"])
-
-                    if self.event.child.get_geometry().width == full_width \
-                            and self.event.child.get_geometry().height == full_height \
-                            and self.event.child.get_geometry().x == self.zero_coordinate \
-                            and self.event.child.get_geometry().y == 0:
-                        self.center_window(self.event.child)
-                    else:
-                        self.event.child.configure(
-                            width=full_width,
-                            height=full_height,
-                            x=self.zero_coordinate,
-                            y=0
-                        )
+            elif self.is_key(self.keys["MAX"]) and self.window_focused():
+                self.toggle_fullscreen(self.event.child)
 
             # Center window (MOD + C)
             elif self.is_key(self.keys["CENTER"]) and self.window_focused():
