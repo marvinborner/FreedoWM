@@ -175,8 +175,6 @@ class FreedoWM(object):
             )
 
     def center_window(self, window):
-        if len(window.query_tree().children) > 0:
-            self.center_window(window.query_tree().children[0])
         window.configure(
             width=round(self.monitors[self.current_monitor]["width"] / 2),
             height=round(self.monitors[self.current_monitor]["height"] / 2),
